@@ -40,8 +40,11 @@ repos:
     refspec: "kirkstone"
 
   meta-qt6:
+    # python3-pyqt6 doesn't exist until this branch -- 6.5 predates the
+    # recipes-python/pyqt6 directory. Verified 6.6 declares kirkstone in
+    # LAYERSERIES_COMPAT.
     url: "https://code.qt.io/yocto/meta-qt6.git"
-    refspec: "6.5"
+    refspec: "6.6"
 
   meta-qt5:
     url: "https://github.com/meta-qt5/meta-qt5.git"
