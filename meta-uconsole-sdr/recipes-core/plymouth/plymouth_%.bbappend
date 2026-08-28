@@ -4,3 +4,10 @@
 # KMS driver (MACHINE_FEATURES "vc4graphics") is exactly what the drm
 # renderer needs, so force it on for this machine.
 PACKAGECONFIG:append = " drm"
+
+# "initrd" is on by default (PACKAGECONFIG ??= "pango initrd") and
+# pulls in plymouth-initrd -> dracut, which isn't provided by any layer
+# here. We don't want it anyway: this build skips initramfs entirely
+# (see INITRAMFS_IMAGE_BUNDLE in the machine conf) by compiling the
+# SD/NVMe drivers directly into the kernel.
+PACKAGECONFIG:remove = "initrd"
