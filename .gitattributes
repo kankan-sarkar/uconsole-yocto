@@ -1,0 +1,4 @@
+# Force LF everywhere regardless of platform/editor, so files committed
+# from Windows and Linux checkouts (this project's dev + build machines)
+# don't show as spuriously "modified" on every pull due to CRLF/LF churn.
+* text=auto eol=lf
