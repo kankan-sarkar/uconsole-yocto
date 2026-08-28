@@ -16,6 +16,12 @@ name: Yocto full build (self-hosted)
 # build is already running when a new push lands, the new run waits for
 # the current one to finish instead of cancelling it or running alongside
 # it.
+#
+# Builds with kas-ci-cache.yml layered on top of kas-project.yml, which
+# points DL_DIR/SSTATE_DIR at the maintainer's existing manual-build
+# cache on the same machine, so this doesn't start cold (and doesn't
+# duplicate 250GB+ of downloads/sstate) on every run. See that file's
+# comments if the build machine's paths ever change.
 
 on:
   push:
@@ -36,7 +42,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: kas build
-        run: kas build kas-project.yml
+        run: kas build kas-project.yml:kas-ci-cache.yml
 
       - name: Show build output
         if: always()

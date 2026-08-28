@@ -1,0 +1,24 @@
+# CI-only kas config fragment -- NOT part of a normal `kas build
+# kas-project.yml` invocation, and not portable to anyone else's machine.
+#
+# Used only by .github/workflows/build.yml as
+# `kas build kas-project.yml:kas-ci-cache.yml`, on the self-hosted runner
+# registered against this repo. It points DL_DIR/SSTATE_DIR at the same
+# paths as the maintainer's manual `kas build` checkout
+# (/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/), so automated
+# runs reuse already-fetched sources and already-built sstate instead of
+# starting cold every time. The runner still does its own isolated git
+# checkout of the source tree (via actions/checkout) -- only the heavy
+# cache directories are shared, so this can't touch or clobber any
+# uncommitted work sitting in that manual checkout.
+#
+# If your build machine's checkout lives somewhere else, update both
+# paths below to match.
+
+header:
+  version: 14
+
+local_conf_header:
+  ci_cache: |
+    DL_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/downloads"
+    SSTATE_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/sstate-cache"
