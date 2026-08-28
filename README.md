@@ -54,6 +54,16 @@ what it's for — start with `meta-uconsole-sdr/recipes-core/images/uconsole-ima
 for the full list of what actually ships in the image, rather than trying to
 read every recipe up front.
 
+## CI
+
+Two GitHub-hosted jobs run on every push/PR: a lint pass and a
+`bitbake -n` dependency-resolution pass (no compilation — see
+`.github/workflows/`). A third workflow, `build.yml`, runs a real
+`kas build` on a self-hosted runner registered against this repo — see
+the comments in that file for how to set one up on your own build
+machine. It only triggers on pushes to `main`, never on pull requests, so
+a public fork can't run code on your hardware.
+
 ## Status
 
 This isn't a finished, field-tested product — it's a from-scratch Yocto BSP

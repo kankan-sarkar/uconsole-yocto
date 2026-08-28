@@ -1,0 +1,44 @@
+name: Yocto full build (self-hosted)
+
+# Runs a real `kas build` on a self-hosted runner -- your own Yocto build
+# machine, not a GitHub-hosted one (a full build needs 250GB+ disk and
+# hours; see README.md). Requires a runner registered against this repo
+# with the "yocto-build" label (Settings -> Actions -> Runners -> New
+# self-hosted runner).
+#
+# Deliberately push-only, no pull_request trigger: this runner executes
+# whatever's in the checked-out ref on your home machine, and this repo is
+# public, so a PR-triggered build here would let anyone run code on your
+# hardware. Keep it scoped to pushes to main that you (or an approved
+# merge) put there.
+#
+# concurrency + cancel-in-progress:false is the queueing behavior: if a
+# build is already running when a new push lands, the new run waits for
+# the current one to finish instead of cancelling it or running alongside
+# it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kas-project.yml"
+      - "meta-uconsole-sdr/**"
+
+concurrency:
+  group: yocto-full-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: [self-hosted, yocto-build]
+    timeout-minutes: 480
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: kas build
+        run: kas build kas-project.yml
+
+      - name: Show build output
+        if: always()
+        run: |
+          ls -lh build/tmp/deploy/images/uconsole-cm4/ || true
