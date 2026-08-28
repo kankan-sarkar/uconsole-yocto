@@ -1,0 +1,67 @@
+name: Yocto recipe parse check
+
+# Not a full image build (that needs 250GB+ disk and hours -- see
+# README.md). This clones the layers and runs bitbake's parse +
+# dependency-resolution pass only, which catches recipe-level mistakes
+# (wrong package names, missing providers, layer priority issues)
+# without compiling anything.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kas-project.yml"
+      - "meta-uconsole-sdr/**"
+      - ".github/workflows/yocto-parse.yml"
+  pull_request:
+    paths:
+      - "kas-project.yml"
+      - "meta-uconsole-sdr/**"
+      - ".github/workflows/yocto-parse.yml"
+  workflow_dispatch:
+
+jobs:
+  parse:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gawk wget git diffstat unzip texinfo gcc \
+            build-essential chrpath socat cpio python3 python3-pip python3-pexpect \
+            xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl-dev \
+            libsdl2-dev pylint xterm python3-subunit mesa-common-dev zstd liblz4-tool locales
+
+      - name: Configure locale
+        run: |
+          sudo locale-gen en_US.UTF-8
+          sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+
+      - name: Relax AppArmor unprivileged userns restriction
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+
+      - name: Install kas
+        run: pip3 install kas
+
+      - name: Cache fetched layers
+        uses: actions/cache@v4
+        with:
+          path: |
+            poky
+            meta-openembedded
+            meta-raspberrypi
+            meta-sdr
+            meta-security
+            meta-qt6
+            meta-qt5
+            meta-rtlwifi
+          key: layers-${{ hashFiles('kas-project.yml') }}
+
+      - name: Parse all recipes and resolve dependencies (no compilation)
+        env:
+          LC_ALL: en_US.UTF-8
+          LANG: en_US.UTF-8
+        run: kas shell kas-project.yml -c "bitbake -n uconsole-image"

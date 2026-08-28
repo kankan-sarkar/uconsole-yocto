@@ -1,0 +1,36 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Syntax-check every recipe's Python source
+        run: find meta-uconsole-sdr -name '*.py' -print0 | xargs -0 -n1 python3 -m py_compile
+
+      - name: flake8 (real errors only -- no style nitpicking)
+        run: flake8 meta-uconsole-sdr --select=E9,F --show-source
+
+  yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint kas-project.yml
+        run: yamllint -d relaxed kas-project.yml
