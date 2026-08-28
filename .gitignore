@@ -23,6 +23,11 @@
 /cache/
 *.log
 
+# Self-hosted GitHub Actions runner, if installed inside the checkout
+# (as on the build machine) -- its .runner/.credentials files hold the
+# secret used to authenticate to GitHub. Must never be committed.
+/actions-runner/
+
 # Build output images, if they ever land outside build/tmp/deploy/
 *.wic
 *.wic.bz2
