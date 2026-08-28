@@ -1,0 +1,61 @@
+# ---------------------------------------------------------------
+# Yocto / kas build artifacts
+# ---------------------------------------------------------------
+# kas checks these external layers out as siblings of kas-project.yml
+# (named after each "repos:" key); they're separate upstream projects
+# fetched at build time, not part of this repo, and are many GB once
+# built. Only meta-uconsole-sdr/ (this project's own layer) should
+# ever be tracked.
+/build/
+/poky/
+/meta-openembedded/
+/meta-raspberrypi/
+/meta-sdr/
+/meta-security/
+/meta-qt6/
+/meta-qt5/
+/meta-rtlwifi/
+
+# In case bitbake/kas is ever pointed at a nonstandard layout
+/downloads/
+/sstate-cache/
+/tmp/
+/cache/
+*.log
+
+# Build output images, if they ever land outside build/tmp/deploy/
+*.wic
+*.wic.bz2
+*.wic.gz
+*.wic.bmap
+*.rootfs*
+*.ext4
+
+# ---------------------------------------------------------------
+# Secrets -- this repo is public. Anything matching these patterns
+# is assumed sensitive and MUST NOT be committed.
+# ---------------------------------------------------------------
+*.pem
+*.key
+*_rsa
+*_ed25519
+*.env
+.env.*
+secrets/
+*.secret
+credentials.json
+# Ad-hoc local.conf/auto.conf fragments devs sometimes create outside
+# build/ for testing with real Wi-Fi/MQTT credentials.
+local.conf
+auto.conf
+
+# ---------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+*.swp

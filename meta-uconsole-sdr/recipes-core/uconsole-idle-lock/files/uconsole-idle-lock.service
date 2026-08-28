@@ -1,0 +1,14 @@
+[Unit]
+Description=UConsole Idle Timeout / Screen Lock Trigger
+After=weston.service
+Requires=weston.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/uconsole-idle-lock
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=graphical.target

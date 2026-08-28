@@ -1,0 +1,16 @@
+#
+# /etc/pam.d/common-auth - authentication settings common to all services
+#
+# uConsole: pam_faillock wraps pam_unix so any PAM-backed local auth
+# (sudo, su, login, sshd password auth) shares the same brute-force
+# protection as the on-screen lock screen. Note pam_faillock's
+# unlock_time is a *fixed* delay, not exponential -- true exponential
+# backoff (requirement.md 7) is enforced by the Qt lock screen, which
+# is the primary interactive gate on this device. deny=5 mirrors
+# MAX_ATTEMPTS in uconsole-lock.py for a consistent threshold.
+#
+auth	required			pam_faillock.so preauth silent audit deny=5 unlock_time=60
+auth	[success=1 default=ignore]	pam_unix.so nullok_secure
+auth	[default=die]			pam_faillock.so authfail audit deny=5 unlock_time=60
+auth	requisite			pam_deny.so
+auth	required			pam_permit.so

@@ -1,0 +1,23 @@
+# requirement.md 6, "Service Masking": only the compositor, network
+# management, and MQTT/telemetry daemons should launch unconditionally
+# at boot. SDR GUIs (gqrx etc) are user-launched on demand and never
+# listed here.
+#
+# Note: each of our own recipes (uconsole-hotkey, uconsole-idle-lock,
+# uconsole-lora-mqtt-bridge, uconsole-oobe) already sets
+# SYSTEMD_AUTO_ENABLE (default "enable" in systemd.bbclass), so their
+# postinst scripts call `systemctl enable` directly and this preset
+# file is not what enables them -- presets only take effect for units
+# nothing has already explicitly enabled/disabled. This file exists as
+# the single auditable statement of boot-time intent, and as a
+# safety net for anything pulled in transitively that we didn't
+# anticipate.
+enable weston-init.service
+enable NetworkManager.service
+enable mosquitto.service
+enable netdata.service
+
+disable bluetooth.service
+disable ModemManager.service
+disable avahi-daemon.service
+disable avahi-daemon.socket

@@ -1,0 +1,4 @@
+# AIO v2 GPS module is wired to the RPi's primary UART.
+# -n: don't wait for a client to connect before polling the device.
+DEVICES="/dev/ttyS0"
+GPSD_OPTIONS="-n"

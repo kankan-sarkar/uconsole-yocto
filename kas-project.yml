@@ -1,0 +1,81 @@
+header:
+  version: 14
+
+machine: uconsole-cm4
+distro: poky
+target:
+  - uconsole-image
+
+repos:
+  poky:
+    url: "https://git.yoctoproject.org/git/poky"
+    refspec: "kirkstone"
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: "https://git.openembedded.org/meta-openembedded"
+    refspec: "kirkstone"
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+      meta-filesystems:
+      meta-perl:
+      meta-multimedia:  # pipewire/wireplumber (requirement.md 4.4)
+      meta-webserver:   # nginx, netdata (requirement.md 5.5, 5.6)
+
+  meta-raspberrypi:
+    url: "https://git.yoctoproject.org/git/meta-raspberrypi"
+    refspec: "kirkstone"
+
+  meta-sdr:
+    url: "https://github.com/balister/meta-sdr.git"
+    refspec: "kirkstone"
+
+  meta-security:
+    url: "https://git.yoctoproject.org/git/meta-security"
+    refspec: "kirkstone"
+
+  meta-qt6:
+    url: "https://code.qt.io/yocto/meta-qt6.git"
+    refspec: "6.5"
+
+  meta-qt5:
+    url: "https://github.com/meta-qt5/meta-qt5.git"
+    refspec: "kirkstone"
+
+  meta-rtlwifi:
+    # Out-of-tree Realtek USB Wi-Fi driver recipes, incl. rtl8812au for
+    # the AC1200 dongle (monitor mode / injection). Not on any release
+    # branch -- LAYERSERIES_COMPAT on master already lists kirkstone.
+    url: "https://github.com/EmbeddedAndroid/meta-rtlwifi.git"
+    refspec: "master"
+
+  meta-uconsole-sdr:
+    # Local path since this layer is in the same repository
+    path: "meta-uconsole-sdr"
+
+bblayers_conf_header:
+  standard: |
+    POKY_BBLAYERS_CONF_VERSION = "2"
+    BBPATH = "${TOPDIR}"
+    BBFILES ?= ""
+
+local_conf_header:
+  standard: |
+    CONF_VERSION = "2"
+    PACKAGE_CLASSES = "package_rpm"
+    USER_CLASSES = "buildstats"
+    PATCHRESOLVE = "noop"
+  systemd: |
+    DISTRO_FEATURES:append = " systemd wayland wifi opengl pam polkit security"
+    VIRTUAL-RUNTIME_init_manager = "systemd"
+    DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+    VIRTUAL-RUNTIME_initscripts = ""
+  performance: |
+    # Use all available cores on the headless server
+    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+    PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"

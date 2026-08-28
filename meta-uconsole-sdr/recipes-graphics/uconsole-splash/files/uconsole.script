@@ -1,0 +1,43 @@
+// uConsole boot splash. Tactical dark background with a centered
+// title and a small dot-spinner. If the OOBE wizard has dropped a
+// custom splash.png into this theme's directory, it's shown instead
+// of the generated title (requirement.md 8, "Boot Aesthetics").
+
+Window.SetBackgroundTopColor(0.043, 0.047, 0.063);
+Window.SetBackgroundBottomColor(0.043, 0.047, 0.063);
+
+custom_image = Image("splash.png");
+
+if (custom_image) {
+    custom_sprite = Sprite(custom_image);
+    custom_sprite.SetX(Window.GetWidth() / 2 - custom_image.GetWidth() / 2);
+    custom_sprite.SetY(Window.GetHeight() / 2 - custom_image.GetHeight() / 2);
+} else {
+    title_image = Image.Text("UCONSOLE", 0.4, 0.988, 0.945, 1);
+    title_sprite = Sprite(title_image);
+    title_sprite.SetX(Window.GetWidth() / 2 - title_image.GetWidth() / 2);
+    title_sprite.SetY(Window.GetHeight() / 2 - title_image.GetHeight() / 2);
+}
+
+spinner_dots = 5;
+spinner_sprites = [];
+for (i = 0; i < spinner_dots; i++) {
+    dot = Image.Text("*", 0.267, 0.635, 0.62, 1);
+    sprite = Sprite(dot);
+    sprite.SetX(Window.GetWidth() / 2 - (spinner_dots * 16 / 2) + i * 16);
+    sprite.SetY(Window.GetHeight() / 2 + 60);
+    sprite.SetOpacity(0.2);
+    spinner_sprites[i] = sprite;
+}
+
+active_dot = 0;
+
+fun refresh_callback() {
+    for (i = 0; i < spinner_dots; i++) {
+        spinner_sprites[i].SetOpacity(0.2);
+    }
+    spinner_sprites[active_dot].SetOpacity(1);
+    active_dot = (active_dot + 1) % spinner_dots;
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
