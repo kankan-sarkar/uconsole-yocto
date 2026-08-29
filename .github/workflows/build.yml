@@ -73,7 +73,11 @@ jobs:
 
           tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION" -x 220 -y 50
 
-          tmux send-keys -t "$SESSION" "kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
+          # A fresh tmux shell doesn't inherit the runner service's own
+          # PATH (which has .venv/bin baked in from whatever environment
+          # was active when the service was installed) -- activate it
+          # explicitly rather than relying on that.
+          tmux send-keys -t "$SESSION" "source /mnt/ssd-drive/yocto-experiments/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do
