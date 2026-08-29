@@ -107,3 +107,16 @@ local_conf_header:
     # qt5-layer dropped rather than carrying a whole extra Qt version
     # for a layer-level formality nothing uses.
     LAYERDEPENDS_sdr-layer = "core meta-python openembedded-layer networking-layer filesystems-layer"
+  gqrx_bbmask: |
+    # bitbake parses every .bb file across all enabled layers
+    # unconditionally, to populate its recipe cache -- regardless of
+    # whether anything actually depends on it. Removing gqrx from
+    # packagegroup-uconsole-sdr.bb doesn't stop meta-sdr's
+    # gqrx_git.bb from still being *parsed*, and it unconditionally
+    # `inherit`s classes/cmake_qt5.bbclass (a class `inherit`, unlike
+    # a DEPENDS entry, is resolved immediately at parse time, not
+    # deferred to dependency resolution) -- which no longer exists
+    # now that meta-qt5 is gone: "ParseError ... Could not inherit
+    # file classes/cmake_qt5.bbclass". Mask the file out entirely so
+    # bitbake never tries to parse it.
+    BBMASK += "meta-sdr/recipes-applications/gqrx/"
