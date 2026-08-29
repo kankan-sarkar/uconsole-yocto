@@ -76,8 +76,12 @@ jobs:
           # A fresh tmux shell doesn't inherit the runner service's own
           # PATH (which has .venv/bin baked in from whatever environment
           # was active when the service was installed) -- activate it
-          # explicitly rather than relying on that.
-          tmux send-keys -t "$SESSION" "source /mnt/ssd-drive/yocto-experiments/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
+          # explicitly rather than relying on that. Also `cd` explicitly
+          # rather than assuming the pane starts in $GITHUB_WORKSPACE:
+          # if the session already existed (manual testing, or ttyd's
+          # service creating it first), it keeps whatever cwd it started
+          # with -- which is how kas ended up trying to mkdir /build.
+          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && source /mnt/ssd-drive/yocto-experiments/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do
