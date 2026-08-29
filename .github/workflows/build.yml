@@ -42,6 +42,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: kas build
+        env:
+          # Actions captures step output via a pipe, not a real tty, so
+          # without this Python block-buffers stdout and the log viewer
+          # shows nothing for long stretches (or dumps it all at once at
+          # the end) instead of streaming live.
+          PYTHONUNBUFFERED: "1"
         run: kas build kas-project.yml:kas-ci-cache.yml
 
       - name: Show build output
