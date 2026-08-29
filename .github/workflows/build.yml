@@ -42,13 +42,31 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: kas build
-        env:
-          # Actions captures step output via a pipe, not a real tty, so
-          # without this Python block-buffers stdout and the log viewer
-          # shows nothing for long stretches (or dumps it all at once at
-          # the end) instead of streaming live.
-          PYTHONUNBUFFERED: "1"
-        run: kas build kas-project.yml:kas-ci-cache.yml
+        # Runs inside a persistent, named tmux session on the runner
+        # instead of as this step's own captured subprocess -- attach
+        # any time with `tmux attach -t gh-actions-yocto-build` (or via
+        # the ttyd web terminal, if set up) to watch it live with a real
+        # tty, which also sidesteps the stdout-buffering-under-a-pipe
+        # issue a plain `run:` step would hit. This step just launches
+        # the build into that session and polls a marker file for the
+        # real exit code, so Actions still reports pass/fail correctly.
+        run: |
+          SESSION=gh-actions-yocto-build
+          MARKER="/tmp/yocto-build-exit-${GITHUB_RUN_ID}"
+          rm -f "$MARKER"
+
+          tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION" -x 220 -y 50
+
+          tmux send-keys -t "$SESSION" "kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
+
+          echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
+          while [ ! -f "$MARKER" ]; do
+            sleep 15
+          done
+          CODE=$(cat "$MARKER")
+          rm -f "$MARKER"
+          echo "kas build finished with exit code $CODE"
+          exit "$CODE"
 
       - name: Show build output
         if: always()
