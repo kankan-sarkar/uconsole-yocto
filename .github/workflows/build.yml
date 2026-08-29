@@ -29,6 +29,7 @@ on:
     paths:
       - "kas-project.yml"
       - "meta-uconsole-sdr/**"
+  workflow_dispatch:
 
 concurrency:
   group: yocto-full-build
