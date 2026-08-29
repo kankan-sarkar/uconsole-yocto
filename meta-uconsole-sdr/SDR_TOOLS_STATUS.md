@@ -10,7 +10,7 @@ and each project's own upstream build files as of 2026-08.
 
 | Tool | Source |
 |---|---|
-| gqrx, gnuradio, rtl-sdr, libhackrf, gr-osmosdr | meta-sdr |
+| gnuradio (GUI plotting blocks off -- see below), rtl-sdr, libhackrf, gr-osmosdr | meta-sdr |
 | aircrack-ng | meta-security |
 | wireshark, NetworkManager, mosquitto(+clients) | meta-openembedded |
 | gpsd (+gps-utils, bound to /dev/ttyS0) | meta-openembedded |
@@ -25,6 +25,30 @@ Their upstream repos, tags, and license files were verified against
 the actual GitHub repos, but they have **not been build-tested** (no
 Linux/bitbake toolchain was available while writing them) -- treat the
 first `bitbake` run against each as the real test, not this list.
+
+## Removed -- real conflict, not a missing recipe
+
+* **gqrx** -- meta-sdr's recipe (`gqrx_git.bb`, pinned to the old
+  2.15.9 release) is Qt5-only (`inherit cmake_qt5`). This project's
+  own PyQt6 desktop apps need Qt6's `qtbase`, and a single bitbake
+  build can't resolve two different providers for the same recipe
+  name -- meta-qt5 and meta-qt6 both declare a recipe literally named
+  `qtbase`. Rather than drop the project's own Qt6 apps, gqrx (and
+  meta-qt5 entirely) was removed; GNU Radio's own optional Qt5 GUI
+  plotting blocks (`qtgui5` PACKAGECONFIG) were disabled the same way,
+  since nothing here consumed the `gnuradio-qtgui` subpackage anyway.
+  No decoding/logging capability is lost -- `dump1090`, `rtl_433`,
+  `multimon-ng`, and `direwolf` all still work headless, and
+  `gnuradio-companion` (still enabled) can build a custom
+  spectrum/waterfall flowgraph -- but there's no turnkey "tune and
+  listen" GUI receiver in the image anymore.
+
+  Current gqrx upstream (latest `v2.17.7`) actually supports Qt6
+  natively (`-DFORCE_QT6=ON` in its CMakeLists.txt, confirmed against
+  the real source) -- meta-sdr's bundled recipe just predates that. A
+  fresh local recipe targeting a current release with `qt6-cmake`
+  instead of `cmake_qt5` would restore it without reintroducing the
+  Qt5 conflict; this is real, doable, unstarted work, not a dead end.
 
 ## Not packaged -- no viable Yocto recipe found anywhere
 

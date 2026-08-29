@@ -44,14 +44,22 @@ repos:
     # recipes-python/pyqt6 directory. Verified 6.6 declares kirkstone in
     # LAYERSERIES_COMPAT.
     #
-    # meta-qt5 was previously included alongside this, but nothing in
-    # meta-uconsole-sdr actually uses Qt5/PyQt5 -- it was vestigial, and
-    # worse than useless: both layers declare a recipe named "qtbase",
-    # and with both present bitbake resolved the ambiguous
-    # qtbase-native provider to meta-qt5's (5.15.7) instead of
-    # meta-qt6's, breaking python3-pyqt6's do_configure ("sip-build:
-    # Qt v6 is required, not v5.15.7"). Removed rather than pinning
-    # PREFERRED_PROVIDER around a layer nothing here needs.
+    # meta-qt5 was previously included alongside this. A single bitbake
+    # build can only resolve one provider for a given recipe name, and
+    # both layers declare a recipe named "qtbase" -- with both present,
+    # bitbake resolved the ambiguous qtbase-native provider to
+    # meta-qt5's (5.15.7) instead of meta-qt6's, breaking
+    # python3-pyqt6's do_configure ("sip-build: Qt v6 is required, not
+    # v5.15.7"). There's no way to give one recipe Qt5's qtbase and
+    # another Qt6's qtbase in the same build, so this was a genuine
+    # choice, not just an ambiguity to pin away: meta-sdr's gqrx
+    # recipe is a real Qt5-only app (removed from
+    # packagegroup-uconsole-sdr.bb), and gnuradio's optional Qt5 GUI
+    # blocks are disabled via a bbappend (nothing here consumed the
+    # gnuradio-qtgui subpackage). See the LAYERDEPENDS_sdr-layer
+    # override below -- meta-sdr's own layer.conf hard-requires
+    # qt5-layer regardless of whether any of its recipes we actually
+    # build need it.
     url: "https://code.qt.io/yocto/meta-qt6.git"
     refspec: "6.6"
 
@@ -87,3 +95,15 @@ local_conf_header:
     # Use all available cores on the headless server
     BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
     PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+  sdr_layer_qt5_override: |
+    # meta-sdr/conf/layer.conf unconditionally declares
+    # LAYERDEPENDS_sdr-layer with qt5-layer in it, so bitbake refuses
+    # to even start ("Layer 'sdr-layer' depends on layer 'qt5-layer',
+    # but this layer is not enabled") unless meta-qt5 is present --
+    # regardless of whether any meta-sdr recipe we actually build
+    # needs it. It doesn't, once gqrx is removed and gnuradio's qtgui5
+    # PACKAGECONFIG is disabled (see packagegroup-uconsole-sdr.bb and
+    # the gnuradio_git.bbappend). Override the declared value with
+    # qt5-layer dropped rather than carrying a whole extra Qt version
+    # for a layer-level formality nothing uses.
+    LAYERDEPENDS_sdr-layer = "core meta-python openembedded-layer networking-layer filesystems-layer"
