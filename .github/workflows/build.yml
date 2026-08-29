@@ -55,13 +55,29 @@ jobs:
           MARKER="/tmp/yocto-build-exit-${GITHUB_RUN_ID}"
           rm -f "$MARKER"
 
+          # The tmux session has no parent/child relationship to this
+          # step's own process, so cancelling the Actions run would
+          # normally just kill this polling loop and leave the real
+          # build running orphaned in tmux. Catch that and send Ctrl-C
+          # into the pane instead, so bitbake gets its normal graceful
+          # shutdown (finish in-flight tasks, then stop) rather than
+          # being silently abandoned.
+          cleanup() {
+            echo "Cancellation requested -- sending Ctrl-C into '$SESSION'"
+            tmux send-keys -t "$SESSION" C-c
+            rm -f "$MARKER"
+            exit 1
+          }
+          trap cleanup TERM INT
+
           tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION" -x 220 -y 50
 
           tmux send-keys -t "$SESSION" "kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do
-            sleep 15
+            sleep 15 &
+            wait $!
           done
           CODE=$(cat "$MARKER")
           rm -f "$MARKER"
