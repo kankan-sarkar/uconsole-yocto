@@ -56,7 +56,6 @@ jobs:
             meta-sdr
             meta-security
             meta-qt6
-            meta-qt5
             meta-rtlwifi
           key: layers-${{ hashFiles('kas-project.yml') }}
 

@@ -13,7 +13,6 @@
 /meta-sdr/
 /meta-security/
 /meta-qt6/
-/meta-qt5/
 /meta-rtlwifi/
 
 # In case bitbake/kas is ever pointed at a nonstandard layout

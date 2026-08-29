@@ -43,12 +43,17 @@ repos:
     # python3-pyqt6 doesn't exist until this branch -- 6.5 predates the
     # recipes-python/pyqt6 directory. Verified 6.6 declares kirkstone in
     # LAYERSERIES_COMPAT.
+    #
+    # meta-qt5 was previously included alongside this, but nothing in
+    # meta-uconsole-sdr actually uses Qt5/PyQt5 -- it was vestigial, and
+    # worse than useless: both layers declare a recipe named "qtbase",
+    # and with both present bitbake resolved the ambiguous
+    # qtbase-native provider to meta-qt5's (5.15.7) instead of
+    # meta-qt6's, breaking python3-pyqt6's do_configure ("sip-build:
+    # Qt v6 is required, not v5.15.7"). Removed rather than pinning
+    # PREFERRED_PROVIDER around a layer nothing here needs.
     url: "https://code.qt.io/yocto/meta-qt6.git"
     refspec: "6.6"
-
-  meta-qt5:
-    url: "https://github.com/meta-qt5/meta-qt5.git"
-    refspec: "kirkstone"
 
   meta-rtlwifi:
     # Out-of-tree Realtek USB Wi-Fi driver recipes, incl. rtl8812au for
