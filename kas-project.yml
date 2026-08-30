@@ -92,17 +92,31 @@ local_conf_header:
     DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
     VIRTUAL-RUNTIME_initscripts = ""
   performance: |
-    # Capped at 2, not oe.utils.cpu_count() -- the actual build machine
-    # (hs01) has 7.5GB RAM, well under Yocto's 16GB recommendation and
-    # even under the "reduce to 2" threshold this README already
-    # documented for 8GB-class hosts, which was never actually wired
-    # up here. Confirmed via dmesg: unthrottled parallelism triggered
-    # a real OOM event (3 kills in under a minute, including cc1plus
-    # doing real compile work and the bash shell running the build
-    # itself), killing the build outright rather than just running
-    # slowly.
-    BB_NUMBER_THREADS = "2"
-    PARALLEL_MAKE = "-j 2"
+    # hs01 was bumped to 16GB RAM after a real OOM event (confirmed via
+    # dmesg: 3 kills in under a minute at the old 7.5GB, including
+    # cc1plus doing real compile work and the bash shell running the
+    # build itself) -- back to full core count rather than the
+    # temporary cap of 2. hs01's CPU (Intel N100) is a fixed 4-core/
+    # 4-thread part with no unlocked multiplier, so cpu_count() here
+    # already resolves to the real ceiling; there's no more genuine
+    # parallelism to extract from this chip regardless of RAM.
+    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+    PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+
+    # Adaptive safety net on top of the above: hs01 is a shared home
+    # server (Postgres, Docker, Grafana, NordVPN, Sonarr all run on it
+    # too), so available RAM isn't purely a function of the build's
+    # own settings -- something else on the box can spike memory
+    # independent of bitbake. These make the scheduler pause starting
+    # *new* tasks (not kill anything) when measured system pressure
+    # crosses the threshold, giving running tasks room to finish
+    # rather than piling more work on top. "15000" is bitbake's own
+    # documented starting default (bitbake-user-manual-ref-variables,
+    # BB_PRESSURE_MAX_MEMORY) -- tune from there if it proves too
+    # aggressive or too lenient in practice.
+    BB_PRESSURE_MAX_CPU = "15000"
+    BB_PRESSURE_MAX_IO = "15000"
+    BB_PRESSURE_MAX_MEMORY = "15000"
   sdr_layer_qt5_override: |
     # meta-sdr/conf/layer.conf unconditionally declares
     # LAYERDEPENDS_sdr-layer with qt5-layer in it, so bitbake refuses
