@@ -107,15 +107,20 @@ local_conf_header:
     # server (Postgres, Docker, Grafana, NordVPN, Sonarr all run on it
     # too), so available RAM isn't purely a function of the build's
     # own settings -- something else on the box can spike memory
-    # independent of bitbake. These make the scheduler pause starting
-    # *new* tasks (not kill anything) when measured system pressure
-    # crosses the threshold, giving running tasks room to finish
-    # rather than piling more work on top. "15000" is bitbake's own
-    # documented starting default (bitbake-user-manual-ref-variables,
-    # BB_PRESSURE_MAX_MEMORY) -- tune from there if it proves too
-    # aggressive or too lenient in practice.
-    BB_PRESSURE_MAX_CPU = "15000"
-    BB_PRESSURE_MAX_IO = "15000"
+    # independent of bitbake. Memory only, not CPU/IO: deliberately
+    # oversubscribing all 4 cores means at least one task waiting on
+    # CPU is the *normal*, expected state during real compilation, not
+    # a problem -- BB_PRESSURE_MAX_CPU at the documented starting
+    # default of "15000" measured actual pressure of 300000-770000 in
+    # practice (confirmed via the "Pressure status changed" log lines)
+    # and throttled bitbake down to 1 of 4 threads almost constantly,
+    # directly undoing the full-core-utilization intent above. Memory
+    # pressure doesn't have that problem: it should stay near zero
+    # unless something is actually going wrong, which is exactly the
+    # OOM scenario this is meant to catch. "15000" is bitbake's own
+    # documented starting default for BB_PRESSURE_MAX_MEMORY
+    # specifically -- tune from there if it proves too aggressive or
+    # too lenient in practice.
     BB_PRESSURE_MAX_MEMORY = "15000"
   sdr_layer_qt5_override: |
     # meta-sdr/conf/layer.conf unconditionally declares
