@@ -103,25 +103,11 @@ local_conf_header:
     BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
     PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
 
-    # Adaptive safety net on top of the above: hs01 is a shared home
-    # server (Postgres, Docker, Grafana, NordVPN, Sonarr all run on it
-    # too), so available RAM isn't purely a function of the build's
-    # own settings -- something else on the box can spike memory
-    # independent of bitbake. Memory only, not CPU/IO: deliberately
-    # oversubscribing all 4 cores means at least one task waiting on
-    # CPU is the *normal*, expected state during real compilation, not
-    # a problem -- BB_PRESSURE_MAX_CPU at the documented starting
-    # default of "15000" measured actual pressure of 300000-770000 in
-    # practice (confirmed via the "Pressure status changed" log lines)
-    # and throttled bitbake down to 1 of 4 threads almost constantly,
-    # directly undoing the full-core-utilization intent above. Memory
-    # pressure doesn't have that problem: it should stay near zero
-    # unless something is actually going wrong, which is exactly the
-    # OOM scenario this is meant to catch. "15000" is bitbake's own
-    # documented starting default for BB_PRESSURE_MAX_MEMORY
-    # specifically -- tune from there if it proves too aggressive or
-    # too lenient in practice.
-    BB_PRESSURE_MAX_MEMORY = "15000"
+    # No BB_PRESSURE_MAX_* -- previously had CPU/IO/MEMORY pressure
+    # throttling as an OOM safety net (see git history), removed now
+    # that hs01 has its own live CPU/RAM/disk/temp dashboard being
+    # watched directly: full, unthrottled parallelism, trading the
+    # automated backoff for manual oversight instead.
   sdr_layer_qt5_override: |
     # meta-sdr/conf/layer.conf unconditionally declares
     # LAYERDEPENDS_sdr-layer with qt5-layer in it, so bitbake refuses
