@@ -92,9 +92,17 @@ local_conf_header:
     DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
     VIRTUAL-RUNTIME_initscripts = ""
   performance: |
-    # Use all available cores on the headless server
-    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
-    PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+    # Capped at 2, not oe.utils.cpu_count() -- the actual build machine
+    # (hs01) has 7.5GB RAM, well under Yocto's 16GB recommendation and
+    # even under the "reduce to 2" threshold this README already
+    # documented for 8GB-class hosts, which was never actually wired
+    # up here. Confirmed via dmesg: unthrottled parallelism triggered
+    # a real OOM event (3 kills in under a minute, including cc1plus
+    # doing real compile work and the bash shell running the build
+    # itself), killing the build outright rather than just running
+    # slowly.
+    BB_NUMBER_THREADS = "2"
+    PARALLEL_MAKE = "-j 2"
   sdr_layer_qt5_override: |
     # meta-sdr/conf/layer.conf unconditionally declares
     # LAYERDEPENDS_sdr-layer with qt5-layer in it, so bitbake refuses
