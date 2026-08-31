@@ -2,10 +2,11 @@
 /*
  * Ported from ClockworkPi's kernel fork (cuu/ClockworkPi-linux,
  * rpi-6.12.y, drivers/gpu/drm/panel/panel-cwu50.c) onto this
- * project's rpi-5.15.y (linux-raspberrypi_5.15.bb) baseline. Only
- * change made: struct drm_panel's prepare_prev_first field is named
- * prepare_upstream_first on 5.15 -- see the comment at that line.
- * Otherwise unmodified: not build- or hardware-tested here.
+ * project's rpi-5.15.y (linux-raspberrypi_5.15.bb) baseline. Two
+ * real API differences found via actual failed builds, not
+ * inspection -- see the comments at each: struct drm_panel's
+ * prepare_prev_first field is named prepare_upstream_first on 5.15,
+ * and mipi_dsi_driver.remove returns int here, not void.
  */
 
 #include <drm/drm_modes.h>
@@ -836,12 +837,20 @@ static int cwu50_probe(struct mipi_dsi_device *dsi)
 	return 0;
 }
 
-static void cwu50_remove(struct mipi_dsi_device *dsi)
+/*
+ * Real build on hs01 caught this too: struct mipi_dsi_driver.remove
+ * returns int on this kernel (rpi-5.15.y), not void as in upstream's
+ * 6.12-era driver -- confirmed against the real
+ * include/drm/drm_mipi_dsi.h on that branch before making this
+ * change.
+ */
+static int cwu50_remove(struct mipi_dsi_device *dsi)
 {
 	struct cwu50 *ctx = mipi_dsi_get_drvdata(dsi);
 
 	mipi_dsi_detach(dsi);
 	drm_panel_remove(&ctx->panel);
+	return 0;
 }
 
 static const struct of_device_id cwu50_of_match[] = {
