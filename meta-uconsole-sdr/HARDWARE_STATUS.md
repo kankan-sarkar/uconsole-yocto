@@ -110,6 +110,24 @@ directly on hs01 rather than trusting that:
   a kernel `.cfg` fragment is added here: check the actual `.config`
   for the requested symbol, don't just check the task didn't fail.
 
+* **Second round, same lesson, different mechanism.** After promoting
+  `BACKLIGHT_CLASS_DEVICE=y`, `DRM_PANEL_CWU50` and `BACKLIGHT_OCP8178`
+  were *still* silently "not set" -- but this time not from an unmet
+  Kconfig dependency. Verified by hand on hs01: force-setting both
+  with the kernel's own `scripts/config` and re-running a real
+  `make olddefconfig` against the exact same `.config` kept them `=y`
+  with no complaint, proving both symbols' actual dependencies were
+  already fully satisfied. The likely real cause: kernel-yocto's own
+  fragment-merge step checks requested symbols against
+  `yocto-kernel-cache`'s symbol-audit database, and brand-new symbols
+  this project just introduced aren't in it -- so the request gets
+  silently filtered rather than merged, even though the symbol is
+  perfectly valid in the (patched) source tree. Worked around with a
+  `do_configure:append()` that force-sets just these two symbols via
+  `scripts/config` after the normal config step, then re-runs
+  `olddefconfig` -- the exact mechanism confirmed working by hand,
+  not a guess.
+
 ## Genuinely still unverified
 
 * **Neither driver has been build-tested or run on real hardware.**

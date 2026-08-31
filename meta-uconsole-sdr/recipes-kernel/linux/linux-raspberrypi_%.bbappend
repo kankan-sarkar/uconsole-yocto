@@ -83,3 +83,31 @@ config BACKLIGHT_OCP8178\
         '/^# Backlight & LCD drivers$/a\obj-$(CONFIG_BACKLIGHT_OCP8178)		+= ocp8178_bl.o' \
         "${S}/drivers/video/backlight/Makefile"
 }
+
+# uconsole-display-panel.cfg's CONFIG_DRM_PANEL_CWU50=y and
+# CONFIG_BACKLIGHT_OCP8178=y requests were confirmed on a real build
+# to get silently dropped during kernel-yocto's own fragment-merge
+# step, despite both symbols' actual Kconfig dependencies being fully
+# satisfied (verified directly: force-setting them with the kernel's
+# own scripts/config and re-running a real `make olddefconfig`
+# against the exact same .config keeps them =y with no complaint --
+# other .cfg-fragment-requested symbols in this same bbappend, e.g.
+# uconsole-pmic-rtc.cfg's, merge in fine). Most likely cause: these
+# are brand-new symbols this project just introduced, unknown to
+# kernel-yocto's own yocto-kernel-cache symbol-audit database, which
+# that merge step silently filters against. Bypass that layer
+# entirely for just these two: force them directly into the real
+# .config after do_configure has produced it, using the exact
+# mechanism confirmed to work.
+do_configure:append() {
+    ${S}/scripts/config --file ${B}/.config -e DRM_PANEL_CWU50
+    ${S}/scripts/config --file ${B}/.config -e BACKLIGHT_OCP8178
+    # Deliberately not passing ARCH= here: the shell environment this
+    # task runs in already has the correct kernel-internal ARCH value
+    # (arm64, not bitbake's own TARGET_ARCH "aarch64") exported by
+    # kernel.bbclass for the whole recipe -- confirmed by hand on
+    # hs01 that overriding it is unnecessary and risks getting it
+    # wrong (bitbake's ${ARCH} variable resolves to "aarch64", which
+    # the kernel's own Makefile doesn't recognize).
+    yes '' | oe_runmake -C ${S} O=${B} olddefconfig
+}
