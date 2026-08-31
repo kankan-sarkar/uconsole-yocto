@@ -13,7 +13,15 @@ LIC_FILES_CHKSUM = "file://COPYING;md5=d32239bcb673463ab874e80d47fae504"
 # Qt6 (meta-qt6) already used for python3-pyqt6 without any Qt5 layer.
 DEPENDS = "gnuradio gr-osmosdr qtbase qtsvg"
 
-inherit cmake
+# Plain `cmake` isn't enough for a Qt6 CMake app under cross-compile:
+# Qt6's own CMake modules (Qt6Dependencies.cmake) need to invoke host
+# tools (moc/uic/rcc) during configure, which requires QT_HOST_PATH
+# pointing at a native Qt6 install -- confirmed via the real failure:
+# "To use a cross-compiled Qt, please set the QT_HOST_PATH cache
+# variable". meta-qt6's qt6-cmake.bbclass (verified against its actual
+# content) is exactly this: inherits cmake, prepends qtbase-native to
+# DEPENDS, and passes -DQT_HOST_PATH pointing at the native sysroot.
+inherit qt6-cmake
 
 SRC_URI = "git://github.com/gqrx-sdr/gqrx.git;branch=master;protocol=https"
 SRCREV = "1a8ab3a3cc02db3bf4c9058ed4b60ddad06fe9d1"
