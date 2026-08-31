@@ -79,6 +79,37 @@ config.txt, keyboard firmware, schematics) and their kernel fork
   none. `RPI_EXTRA_CONFIG` also gained `ignore_lcd=1` and
   `max_framebuffers=2` from the same reference config.txt.
 
+## Verified against the real build on hs01
+
+The first CI run after this change succeeded, but "the build succeeded"
+turned out not to mean "the config actually landed" -- checked
+directly on hs01 rather than trusting that:
+
+* The `sed`-based Kconfig/Makefile/overlay wiring in
+  `linux-raspberrypi_%.bbappend` **did** land correctly in the real
+  source tree (`tmp/work-shared/uconsole-cm4/kernel-source/` -- not
+  the per-recipe workdir, a kernel-yocto-specific detail found the
+  hard way while chasing this down). `arch/arm64/boot/dts/overlays`
+  turned out to be a symlink to `arch/arm/boot/dts/overlays`, so the
+  overlay Makefile edit (targeting the `arm` path, matching the real
+  upstream Makefile's own location) was correct as written.
+* But **`CONFIG_DRM_PANEL_CWU50` and `CONFIG_BACKLIGHT_OCP8178` were
+  silently "not set" in the final `.config`** despite
+  `uconsole-display-panel.cfg` requesting `=y` for both. Root cause:
+  the stock defconfig has `CONFIG_BACKLIGHT_CLASS_DEVICE=m`, and both
+  new symbols `depends on` it -- Kconfig's dependency solver drops a
+  `=y` request back to unset with no error or warning when a
+  dependency is only `=m`, rather than failing loudly. Fixed by also
+  promoting `CONFIG_BACKLIGHT_CLASS_DEVICE=y` in the same fragment
+  (safe: a module can depend on a built-in fine, so this doesn't
+  break whatever else already used it as `=m`).
+* This is exactly the kind of thing "the build succeeded" doesn't
+  catch -- a `.cfg` fragment requesting a symbol that then silently
+  fails its own dependency check produces a perfectly green build
+  with the driver just... not enabled. Worth remembering next time
+  a kernel `.cfg` fragment is added here: check the actual `.config`
+  for the requested symbol, don't just check the task didn't fail.
+
 ## Genuinely still unverified
 
 * **Neither driver has been build-tested or run on real hardware.**
