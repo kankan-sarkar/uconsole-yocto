@@ -128,6 +128,34 @@ directly on hs01 rather than trusting that:
   `olddefconfig` -- the exact mechanism confirmed working by hand,
   not a guess.
 
+## Third round: the kernel now builds and boots the driver code, but the overlay wasn't shipped
+
+With the two Kconfig-merge fixes above, `linux-raspberrypi` actually
+built clean: `panel-cwu50.ko` (module -- `DRM_PANEL_CWU50` ended up
+`=m`, not `=y`, because its `depends on DRM` couldn't be satisfied by
+`CONFIG_DRM=m`; `scripts/config -e` + a real `olddefconfig` downgraded
+it to the best achievable value rather than dropping it, which is
+fine -- confirmed the `.ko` is packaged and actually installed into
+the real rootfs) and `ocp8178_bl` (built-in, `=y`, confirmed in the
+final `.config`). Two more real compile errors surfaced and got fixed
+along the way, both genuine 5.15-vs-6.12 kernel API drift caught by
+the actual build, not guessed: `backlight_ops.controls_device` doesn't
+exist on 5.15 (`check_fb` instead), and `mipi_dsi_driver.remove`
+returns `int` here, not `void`.
+
+But the devicetree overlay itself was never built at all, despite
+being correctly added to the overlays Makefile's `dtbo-y` list --
+confirmed empirically: nothing named `clockworkpi-uconsole` exists
+anywhere in the build output tree, yet dozens of *other* overlays in
+that same Makefile list did build. The actual gate turned out to be a
+separate variable, `RPI_KERNEL_DEVICETREE_OVERLAYS` (from
+`rpi-base.inc`) -- every overlay that did build/deploy was a member of
+it. Added `clockworkpi-uconsole.dtbo` to it in `uconsole-cm4.conf`.
+Without this, `RPI_EXTRA_CONFIG`'s `dtoverlay=clockworkpi-uconsole`
+line in config.txt would have referenced an overlay that was never
+even compiled -- the firmware would have failed to apply it at boot
+(silently or with a boot-log error, untested which).
+
 ## Genuinely still unverified
 
 * **Neither driver has been build-tested or run on real hardware.**
