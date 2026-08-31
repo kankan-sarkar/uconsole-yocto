@@ -5,12 +5,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  *
- * Copied verbatim from ClockworkPi's kernel fork
- * (cuu/ClockworkPi-linux, rpi-6.12.y,
- * drivers/video/backlight/ocp8178_bl.c) onto this project's
- * rpi-5.15.y baseline -- its backlight_ops/platform_driver API usage
- * is stable across that range, so no changes were needed. Not build-
- * or hardware-tested here.
+ * Ported from ClockworkPi's kernel fork (cuu/ClockworkPi-linux,
+ * rpi-6.12.y, drivers/video/backlight/ocp8178_bl.c) onto this
+ * project's rpi-5.15.y baseline. One real adaptation needed, caught
+ * by an actual failed build rather than inspection: backlight_ops
+ * has check_fb(bd, fb_info*) on this kernel, not the newer
+ * controls_device(bd, device*) upstream uses -- see the comment at
+ * that function below.
  */
 
 #include <linux/backlight.h>
@@ -157,17 +158,30 @@ static int ocp8178_get_brightness(struct backlight_device *bl)
 	return gbl->current_value;
 }
 
-static bool ocp8178_controls_device(struct backlight_device *bl, struct device *display_dev)
+/*
+ * Real build on hs01 caught this: upstream's driver (ClockworkPi's
+ * 6.12-era kernel fork) uses backlight_ops.controls_device(bd,
+ * struct device *), added to the kernel later than 5.15. This
+ * project's kernel (rpi-5.15.y) still has the older check_fb(bd,
+ * struct fb_info *) callback instead -- confirmed against the real
+ * include/linux/backlight.h on that branch before writing this.
+ * Same purpose (which fbdev/display this backlight instance
+ * controls), adapted via fb_info's own ->dev pointer. gbl->fbdev is
+ * never actually assigned anywhere in this driver as shipped, so
+ * this is currently unconditionally true either way -- preserved
+ * faithfully rather than simplified, in case that changes later.
+ */
+static int ocp8178_check_fb(struct backlight_device *bl, struct fb_info *info)
 {
 	struct ocp8178_backlight *gbl = bl_get_data(bl);
-	return !gbl->fbdev || gbl->fbdev == display_dev;
+	return !gbl->fbdev || (info && gbl->fbdev == info->dev);
 }
 
 static const struct backlight_ops ocp8178_backlight_ops = {
 	.options = BL_CORE_SUSPENDRESUME,
 	.update_status = ocp8178_update_status,
 	.get_brightness = ocp8178_get_brightness,
-	.controls_device = ocp8178_controls_device,
+	.check_fb = ocp8178_check_fb,
 };
 
 static int ocp8178_probe_dt(struct platform_device *pdev,
