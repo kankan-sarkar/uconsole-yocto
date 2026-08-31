@@ -19,36 +19,30 @@ and each project's own upstream build files as of 2026-08.
 | netdata, nginx | meta-openembedded (meta-webserver) |
 | soapysdr, soapysdr-module-rtlsdr, soapysdr-module-hackrf | new recipes in this layer, git-pinned to tagged releases |
 | rtl_433, multimon-ng, direwolf, dump1090 | new recipes in this layer, git-pinned to tagged releases |
+| gqrx | new recipe in this layer, pinned to upstream `v2.17.7`, built against Qt6 |
 
-The four "new recipes" rows above are hand-written for this project.
-Their upstream repos, tags, and license files were verified against
-the actual GitHub repos, but they have **not been build-tested** (no
-Linux/bitbake toolchain was available while writing them) -- treat the
-first `bitbake` run against each as the real test, not this list.
+The "new recipes" rows above are hand-written for this project. Their
+upstream repos, tags, and license files were verified against the
+actual GitHub repos; direwolf, dump1090, and gqrx have since been
+confirmed building successfully against real CI, the rest have not yet
+had a clean build reach them -- treat the first `bitbake` run against
+each as the real test, not this list.
 
-## Removed -- real conflict, not a missing recipe
+## Previously removed, now restored
 
-* **gqrx** -- meta-sdr's recipe (`gqrx_git.bb`, pinned to the old
-  2.15.9 release) is Qt5-only (`inherit cmake_qt5`). This project's
-  own PyQt6 desktop apps need Qt6's `qtbase`, and a single bitbake
-  build can't resolve two different providers for the same recipe
-  name -- meta-qt5 and meta-qt6 both declare a recipe literally named
-  `qtbase`. Rather than drop the project's own Qt6 apps, gqrx (and
-  meta-qt5 entirely) was removed; GNU Radio's own optional Qt5 GUI
-  plotting blocks (`qtgui5` PACKAGECONFIG) were disabled the same way,
-  since nothing here consumed the `gnuradio-qtgui` subpackage anyway.
-  No decoding/logging capability is lost -- `dump1090`, `rtl_433`,
-  `multimon-ng`, and `direwolf` all still work headless, and
-  `gnuradio-companion` (still enabled) can build a custom
-  spectrum/waterfall flowgraph -- but there's no turnkey "tune and
-  listen" GUI receiver in the image anymore.
+* **gqrx** -- meta-sdr's bundled recipe (`gqrx_git.bb`, pinned to the
+  old 2.15.9 release) was Qt5-only (`inherit cmake_qt5`), which
+  conflicted with this project's own Qt6 PyQt6 desktop apps (a single
+  bitbake build can't resolve two providers for the recipe name
+  `qtbase`). It was dropped entirely for that reason -- see git history
+  (`6fa2bd7`, `bccd071`) for the original removal.
 
-  Current gqrx upstream (latest `v2.17.7`) actually supports Qt6
-  natively (`-DFORCE_QT6=ON` in its CMakeLists.txt, confirmed against
-  the real source) -- meta-sdr's bundled recipe just predates that. A
-  fresh local recipe targeting a current release with `qt6-cmake`
-  instead of `cmake_qt5` would restore it without reintroducing the
-  Qt5 conflict; this is real, doable, unstarted work, not a dead end.
+  Restored via a new local recipe (`gqrx_2.17.7.bb`) pinned to
+  upstream's current release, which added a `FORCE_QT6` CMake option
+  (confirmed against the real `CMakeLists.txt` at that tag) that builds
+  against Qt6's `qtbase`/`qtsvg` directly -- no Qt5 layer needed.
+  meta-sdr's own `gqrx_git.bb` stays `BBMASK`'d out (see
+  `gqrx_bbmask` in `kas-project.yml`) so only this recipe is used.
 
 ## Not packaged -- no viable Yocto recipe found anywhere
 

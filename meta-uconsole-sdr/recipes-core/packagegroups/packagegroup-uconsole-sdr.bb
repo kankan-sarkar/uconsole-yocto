@@ -16,6 +16,7 @@ RDEPENDS:${PN} = " \
     soapysdr-module-hackrf \
     rtl-433 \
     multimon-ng \
+    gqrx \
     direwolf \
     dump1090 \
     gpsd \
