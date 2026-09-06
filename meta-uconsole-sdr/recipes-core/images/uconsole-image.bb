@@ -20,18 +20,32 @@ IMAGE_FEATURES += " \
 # hardware. Without this, a wizard that doesn't come up leaves root
 # with no password at all and no way in, not even over serial.
 #
-# usermod -P sets a known plaintext default (auto-hashed by
-# extrausers.bbclass -- a real, widely-used OE convention, not a raw
-# usermod flag); passwd-expire forces PAM's standard change-password
-# flow (prompts for the new password twice) at the very next login,
-# whether that's a serial getty or SSH. If the OOBE wizard *does* run
-# successfully, its own passwd call overwrites this and clears the
-# expiry as a normal side effect -- no conflict either way.
+# Real build caught this: extrausers.bbclass passes EXTRA_USERS_PARAMS
+# straight through to the real usermod binary with no translation --
+# there's no OE-side "-P means plaintext password" magic (confirmed
+# by reading useradd_base.bbclass's perform_usermod). This project's
+# shadow-utils version defines -P as --prefix (a chroot-directory
+# option, unrelated to passwords), so `usermod -P uconsole root`
+# failed with "prefix must be an absolute path" -- it was passing
+# "uconsole" as a directory path, not a password. Older/other
+# shadow-utils builds may not define -P at all, which is presumably
+# why the "-P plaintext password" convention shows up copy-pasted
+# across various BSP layers; it isn't a real, version-independent
+# feature. The correct, version-independent way is shadow-utils' own
+# documented -p (lowercase), which takes an already-encrypted
+# password. Hash generated once with a fixed salt for a reproducible
+# build: `openssl passwd -6 -salt uconsole uconsole`.
+#
+# passwd-expire forces PAM's standard change-password flow (prompts
+# for the new password twice) at the very next login, whether that's
+# a serial getty or SSH. If the OOBE wizard *does* run successfully,
+# its own passwd call overwrites this and clears the expiry as a
+# normal side effect -- no conflict either way.
 #
 # "uconsole" is a placeholder default, not a real security posture --
 # revisit before this image goes anywhere near untrusted networks.
 EXTRA_USERS_PARAMS = "\
-    usermod -P uconsole root; \
+    usermod -p '$6$uconsole$2Za1/ZgSaHIRYRsoCx3U.Tb.h90Jng.pBeJxnjEZhjoDhfVlyLr36SOg9aiI7f1eEPaeUc89a/05xLn.I2.Md/' root; \
     passwd-expire root; \
 "
 
