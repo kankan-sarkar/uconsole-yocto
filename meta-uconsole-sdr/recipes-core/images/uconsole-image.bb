@@ -44,8 +44,20 @@ IMAGE_FEATURES += " \
 #
 # "uconsole" is a placeholder default, not a real security posture --
 # revisit before this image goes anywhere near untrusted networks.
+#
+# Second real bug, found the same way (checking the actual built
+# rootfs, not just a green build): set_user_group() does
+# user_group_settings="${EXTRA_USERS_PARAMS}" -- bitbake pastes this
+# value in literally, landing inside a DOUBLE-quoted shell string.
+# Single quotes have no special meaning nested inside an already-
+# double-quoted string, so they gave the hash's own $6/$uconsole/$2
+# zero protection from real shell variable expansion (all three
+# unset, so they silently vanished) -- confirmed by reproducing
+# set_user_group's exact assignment by hand. Fix: escape every
+# literal $ in the hash with a backslash, verified the same way to
+# survive intact all the way to the final eval'd usermod command.
 EXTRA_USERS_PARAMS = "\
-    usermod -p '$6$uconsole$2Za1/ZgSaHIRYRsoCx3U.Tb.h90Jng.pBeJxnjEZhjoDhfVlyLr36SOg9aiI7f1eEPaeUc89a/05xLn.I2.Md/' root; \
+    usermod -p '\$6\$uconsole\$2Za1/ZgSaHIRYRsoCx3U.Tb.h90Jng.pBeJxnjEZhjoDhfVlyLr36SOg9aiI7f1eEPaeUc89a/05xLn.I2.Md/' root; \
     passwd-expire root; \
 "
 
