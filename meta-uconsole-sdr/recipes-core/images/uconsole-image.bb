@@ -122,7 +122,7 @@ IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
 # function's own text (what bitbake hashes) is now a fixed string,
 # while the actual timestamp is still produced fresh at real
 # execution time, not at parse time.
-UCONSOLE_IMAGE_VERSION = "1.0.0b"
+UCONSOLE_IMAGE_VERSION = "1.0.0c"
 
 uconsole_write_version_banner () {
     build_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
@@ -132,3 +132,20 @@ uconsole_write_version_banner () {
     mv ${IMAGE_ROOTFS}${sysconfdir}/issue.uconsole_new ${IMAGE_ROOTFS}${sysconfdir}/issue
 }
 ROOTFS_POSTPROCESS_COMMAND += "uconsole_write_version_banner;"
+
+# Real hardware caught this: the screen never showed anything but the
+# plain kernel text console, no matter what else was fixed, because
+# nothing in this project ever set the systemd default target --
+# confirmed directly in the built rootfs: /etc/systemd/system/
+# default.target symlinked to multi-user.target, poky's own base
+# default. weston.service and uconsole-oobe's oobe.service are both
+# WantedBy=graphical.target (already correctly enabled -- confirmed
+# weston.service is symlinked under graphical.target.wants/), but
+# graphical.target itself was simply never reached at boot, so
+# neither ever started. This is almost certainly why no GUI has ever
+# appeared on real hardware throughout this whole bring-up effort,
+# not something this specific round of fixes introduced.
+set_graphical_target () {
+    ln -sf ${systemd_unitdir}/system/graphical.target ${IMAGE_ROOTFS}${sysconfdir}/systemd/system/default.target
+}
+ROOTFS_POSTPROCESS_COMMAND += "set_graphical_target;"
