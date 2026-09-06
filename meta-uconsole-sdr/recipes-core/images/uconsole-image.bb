@@ -82,3 +82,25 @@ IMAGE_INSTALL += " \
 "
 
 IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
+
+# Build identification. Bump UCONSOLE_IMAGE_VERSION's letter suffix
+# (a, b, c, ...) by hand on every meaningful change to this project --
+# there's no automatic counter, it's a manually-maintained release
+# tag. The point: this is the single, unambiguous, zero-login way to
+# confirm exactly which build is on a given SD card, which several
+# rounds of "is this actually the image I think it is?" confusion
+# during hardware bring-up would have been solved by immediately.
+# Shown at every login prompt (serial or local, before auth) via
+# /etc/issue, and readable any time from a shell via
+# /etc/uconsole-version. ${DATETIME} is bitbake's own build-start
+# timestamp (UTC, YYYYMMDDHHMMSS) -- always fresh per build
+# invocation, unaffected by sstate reuse of this task.
+UCONSOLE_IMAGE_VERSION = "1.0.0a"
+
+uconsole_write_version_banner () {
+    banner="uConsole image ${UCONSOLE_IMAGE_VERSION} -- built ${DATETIME} (YYYYMMDDHHMMSS, UTC)"
+    echo "$banner" > ${IMAGE_ROOTFS}${sysconfdir}/uconsole-version
+    { echo "$banner"; echo; cat ${IMAGE_ROOTFS}${sysconfdir}/issue 2>/dev/null; } > ${IMAGE_ROOTFS}${sysconfdir}/issue.uconsole_new
+    mv ${IMAGE_ROOTFS}${sysconfdir}/issue.uconsole_new ${IMAGE_ROOTFS}${sysconfdir}/issue
+}
+ROOTFS_POSTPROCESS_COMMAND += "uconsole_write_version_banner;"
