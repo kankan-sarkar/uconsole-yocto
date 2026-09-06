@@ -156,6 +156,31 @@ line in config.txt would have referenced an overlay that was never
 even compiled -- the firmware would have failed to apply it at boot
 (silently or with a boot-log error, untested which).
 
+## Fourth round: first real hardware boot attempt (serial console)
+
+2026-09-06, first actual flash + power-on. Two real, sequential
+findings from watching the serial console rather than guessing:
+
+* **Garbled output (repeating null-like bytes), not clean boot text.**
+  Root cause: `enable_uart=1` was cited from ClockworkPi's reference
+  config.txt in an earlier comment here but never actually added to
+  `RPI_EXTRA_CONFIG` -- a real omission, not a hardware issue. Without
+  it, RPi4-class SoCs don't pin the primary UART's clock to a fixed
+  rate; it drifts with the VPU core frequency, corrupting the
+  effective baud rate. Fixed in `d0952bf`.
+
+* **After that fix: complete silence, not garbage.** Root cause,
+  confirmed by reading both overlay sources directly:
+  `dtoverlay=disable-bt` (a pre-existing, this-project-only addition
+  -- not part of ClockworkPi's own reference config.txt at all)
+  explicitly disables `&uart1` and reclaims GPIO14/15 for `&uart0`,
+  while `clockworkpi-uconsole`'s own fragment@2 explicitly enables
+  `&uart1` on those same physical pins. Applied together (disable-bt
+  listed later in config.txt, so its `status` wins for the shared
+  node) they fight over the same pin mux. Removed `disable-bt` in
+  `bc759d8` -- **recommended but not yet confirmed working on
+  hardware as of that commit**; update this entry once it is.
+
 ## Genuinely still unverified
 
 * **Neither driver has been build-tested or run on real hardware.**
