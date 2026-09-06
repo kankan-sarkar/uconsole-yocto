@@ -56,9 +56,27 @@ IMAGE_FEATURES += " \
 # set_user_group's exact assignment by hand. Fix: escape every
 # literal $ in the hash with a backslash, verified the same way to
 # survive intact all the way to the final eval'd usermod command.
+#
+# Second account added as a diagnostic: root logins have been
+# consistently rejected on real hardware even with this exact hash
+# confirmed correct at the file level (permissions, PAM stack, and
+# /etc/securetty all checked out too) -- current leading theory is
+# pam_faillock's deny=5/unlock_time=60 (see common-auth) locking root
+# out from the many attempts made while diagnosing this, possibly
+# compounded by the device's clock not being reliably set at boot
+# (no confirmed-working RTC yet -- see HARDWARE_STATUS.md) confusing
+# unlock_time's wall-clock comparison. A brand-new account has no
+# failure history, so if *this* one logs in fine, that confirms the
+# lockout theory rather than a deeper PAM/hash problem. Same password
+# hash reused deliberately -- crypt hashes aren't tied to a username,
+# and the point here is a matching, memorable password, not a
+# different one. -G sudo since this needs to be a full admin account,
+# not a restricted one, until root itself is sorted out.
 EXTRA_USERS_PARAMS = "\
     usermod -p '\$6\$uconsole\$2Za1/ZgSaHIRYRsoCx3U.Tb.h90Jng.pBeJxnjEZhjoDhfVlyLr36SOg9aiI7f1eEPaeUc89a/05xLn.I2.Md/' root; \
     passwd-expire root; \
+    useradd -m -s /bin/sh -G sudo -p '\$6\$uconsole\$2Za1/ZgSaHIRYRsoCx3U.Tb.h90Jng.pBeJxnjEZhjoDhfVlyLr36SOg9aiI7f1eEPaeUc89a/05xLn.I2.Md/' uconsole; \
+    passwd-expire uconsole; \
 "
 
 # weston/weston-init are also pulled in transitively via uconsole-oobe's
@@ -104,7 +122,7 @@ IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
 # function's own text (what bitbake hashes) is now a fixed string,
 # while the actual timestamp is still produced fresh at real
 # execution time, not at parse time.
-UCONSOLE_IMAGE_VERSION = "1.0.0a"
+UCONSOLE_IMAGE_VERSION = "1.0.0b"
 
 uconsole_write_version_banner () {
     build_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
