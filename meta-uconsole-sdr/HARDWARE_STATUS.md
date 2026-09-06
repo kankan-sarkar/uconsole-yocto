@@ -178,8 +178,21 @@ findings from watching the serial console rather than guessing:
   `&uart1` on those same physical pins. Applied together (disable-bt
   listed later in config.txt, so its `status` wins for the shared
   node) they fight over the same pin mux. Removed `disable-bt` in
-  `bc759d8` -- **recommended but not yet confirmed working on
-  hardware as of that commit**; update this entry once it is.
+  `bc759d8`.
+
+  **Confirmed working**: both fixes were tested by hand-editing
+  `config.txt` directly on an already-flashed card (no rebuild/reflash
+  needed for either, since both are pure firmware-config changes) --
+  serial now shows an interactive login prompt and accepts input, so
+  the pin conflict is real and this fixes it.
+
+* **Bonus confirmed win, unprompted**: the DSI screen itself renders a
+  normal text console (kernel framebuffer console) on real hardware.
+  `panel-cwu50` -- the single most uncertain piece of this whole
+  round, ported from a 6.12-era driver onto a 5.15 kernel and never
+  before run on real silicon -- actually works. Weston/GUI is a
+  separate, still-untested step from here, but the panel lighting up
+  and driving a real picture at all was the biggest open question.
 
 ## Genuinely still unverified
 
