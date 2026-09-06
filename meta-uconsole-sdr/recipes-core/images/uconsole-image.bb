@@ -92,13 +92,23 @@ IMAGE_ROOTFS_EXTRA_SPACE = "1048576"
 # during hardware bring-up would have been solved by immediately.
 # Shown at every login prompt (serial or local, before auth) via
 # /etc/issue, and readable any time from a shell via
-# /etc/uconsole-version. ${DATETIME} is bitbake's own build-start
-# timestamp (UTC, YYYYMMDDHHMMSS) -- always fresh per build
-# invocation, unaffected by sstate reuse of this task.
+# /etc/uconsole-version.
+#
+# Real build error caught this: bitbake's ${DATETIME} is recomputed
+# fresh on every metadata reparse (bitbake parses recipes multiple
+# times per invocation, not once), so textually substituting it into
+# a task function's body made do_rootfs's own basehash non-
+# deterministic within a single build -- exactly what bitbake's
+# "metadata is not deterministic" check exists to catch. Fixed by
+# calling `date` live inside the shell function instead: the
+# function's own text (what bitbake hashes) is now a fixed string,
+# while the actual timestamp is still produced fresh at real
+# execution time, not at parse time.
 UCONSOLE_IMAGE_VERSION = "1.0.0a"
 
 uconsole_write_version_banner () {
-    banner="uConsole image ${UCONSOLE_IMAGE_VERSION} -- built ${DATETIME} (YYYYMMDDHHMMSS, UTC)"
+    build_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+    banner="uConsole image ${UCONSOLE_IMAGE_VERSION} -- built $build_date"
     echo "$banner" > ${IMAGE_ROOTFS}${sysconfdir}/uconsole-version
     { echo "$banner"; echo; cat ${IMAGE_ROOTFS}${sysconfdir}/issue 2>/dev/null; } > ${IMAGE_ROOTFS}${sysconfdir}/issue.uconsole_new
     mv ${IMAGE_ROOTFS}${sysconfdir}/issue.uconsole_new ${IMAGE_ROOTFS}${sysconfdir}/issue
