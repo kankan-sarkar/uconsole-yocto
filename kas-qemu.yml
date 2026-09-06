@@ -1,0 +1,88 @@
+# Standalone kas config for a fast, pre-flash sanity build --
+# NOT merged with kas-project.yml (`kas build kas-qemu.yml` on its
+# own, not `kas-project.yml:kas-qemu.yml`) since it targets a
+# different MACHINE and a different, much smaller image. See
+# meta-uconsole-sdr/recipes-core/images/uconsole-image-qemu-test.bb
+# for exactly what this can and can't validate, and
+# scripts/run-qemu-test.sh for how to actually boot the result.
+#
+# qemux86-64 rather than qemuarm64 deliberately: this is testing
+# generic systemd/PAM/Weston wiring, not anything CPU-architecture-
+# specific, and hs01 (an x86_64 host) can run qemux86-64 under real
+# KVM acceleration -- qemuarm64 on an x86 host falls back to slow
+# software-only TCG emulation, which would defeat the entire point of
+# this being a *fast* iteration loop.
+
+header:
+  version: 14
+
+machine: qemux86-64
+distro: poky
+target:
+  - uconsole-image-qemu-test
+
+repos:
+  poky:
+    url: "https://git.yoctoproject.org/git/poky"
+    refspec: "kirkstone"
+    layers:
+      meta:
+      meta-poky:
+      meta-yocto-bsp:
+
+  meta-openembedded:
+    url: "https://git.openembedded.org/meta-openembedded"
+    refspec: "kirkstone"
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+      meta-filesystems:
+
+  meta-qt6:
+    url: "https://code.qt.io/yocto/meta-qt6.git"
+    refspec: "6.6"
+
+  meta-uconsole-sdr:
+    path: "meta-uconsole-sdr"
+
+bblayers_conf_header:
+  standard: |
+    POKY_BBLAYERS_CONF_VERSION = "2"
+    BBPATH = "${TOPDIR}"
+    BBFILES ?= ""
+
+local_conf_header:
+  standard: |
+    CONF_VERSION = "2"
+    PACKAGE_CLASSES = "package_rpm"
+    USER_CLASSES = "buildstats"
+    PATCHRESOLVE = "noop"
+  systemd: |
+    DISTRO_FEATURES:append = " systemd wayland wifi opengl pam polkit security"
+    VIRTUAL-RUNTIME_init_manager = "systemd"
+    DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
+    VIRTUAL-RUNTIME_initscripts = ""
+  performance: |
+    BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
+    PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
+  qemu_layer_override: |
+    # meta-uconsole-sdr/conf/layer.conf unconditionally declares
+    # LAYERDEPENDS_meta-uconsole-sdr with "raspberrypi" and
+    # "sdr-layer" in it (same class of overly-strict declaration as
+    # kas-project.yml's own sdr_layer_qt5_override works around) --
+    # neither meta-raspberrypi nor meta-sdr is loaded in this config,
+    # since it targets qemux86-64 and deliberately excludes
+    # packagegroup-uconsole-sdr, so bitbake would otherwise refuse to
+    # even start. Override with both dropped rather than pulling in a
+    # whole RPi BSP layer and the SDR layer to satisfy a formality
+    # nothing in this reduced image touches.
+    LAYERDEPENDS_meta-uconsole-sdr = "core qt6-layer openembedded-layer"
+  shared_cache: |
+    # Reuses the same downloads/sstate as the maintainer's manual
+    # uconsole-cm4 build (see kas-ci-cache.yml for the same pattern) --
+    # sstate objects are content-hashed per machine/arch, so sharing
+    # one directory across two different MACHINE targets is safe, not
+    # just convenient: entries from each build simply coexist.
+    DL_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/downloads"
+    SSTATE_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/sstate-cache"
