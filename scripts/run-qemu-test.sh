@@ -46,4 +46,10 @@ fi
 
 echo "==> Booting under QEMU (kvm, $DISPLAY_ARGS, slirp networking)"
 echo "    VNC clients: connect to hs01:5901 if using the default display mode."
-kas shell kas-qemu.yml -c "runqemu qemux86-64 kvm slirp $DISPLAY_ARGS"
+# qemux86-64's own default qemuboot.conf allocates only 256MB. Real
+# hardware has 4GB (requirement.md), and this image can now run two
+# PyQt6/Wayland clients at once (uconsole-shell plus whatever's
+# launched from it) -- bumped for headroom so a slow/thrashing test
+# run doesn't get mistaken for a real hang, the way it briefly did
+# while testing uconsole-shell for the first time.
+kas shell kas-qemu.yml -c "runqemu qemux86-64 kvm slirp $DISPLAY_ARGS qemuparams=\"-m 512\""

@@ -1,0 +1,33 @@
+[Unit]
+Description=UConsole Home Screen (kiosk-shell replacement for Weston's desktop-shell panel)
+# Real hardware finding: kiosk-shell.so (see weston-init.bbappend) draws
+# nothing of its own when no client is mapped, unlike the desktop-shell
+# panel it replaced -- this is what fills that gap.
+#
+# After=oobe.service (a plain ordering dependency, not Requires) is
+# what makes the OOBE-to-home-screen handoff on first boot work
+# without a race: oobe.service is a Type=oneshot unit, so systemd only
+# considers it "started" once its ExecStart process actually exits --
+# meaning this unit won't even try to start, and won't contest for the
+# one fullscreen surface kiosk-shell can show, until the wizard is
+# genuinely done. On every later boot ConditionPathExists=!/etc/.oobe_completed
+# fails instantly (oobe.service is a no-op), so this starts right after
+# weston.service with no perceptible delay.
+After=weston.service oobe.service
+Requires=weston.service
+
+[Service]
+Type=simple
+Environment=WAYLAND_DISPLAY=wayland-1
+Environment=QT_QPA_PLATFORM=wayland
+Environment=QT_IM_MODULE=
+User=root
+Restart=always
+RestartSec=2
+# Same real XDG_RUNTIME_DIR bug as oobe.service (see its own comment
+# for the full explanation): resolved by uid lookup at start time
+# rather than a hardcoded /run/user/1000.
+ExecStart=/bin/sh -c 'export XDG_RUNTIME_DIR=/run/user/$(id -u weston); exec /usr/bin/uconsole-shell'
+
+[Install]
+WantedBy=graphical.target

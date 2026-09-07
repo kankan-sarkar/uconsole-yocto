@@ -28,6 +28,7 @@ IMAGE_INSTALL += " \
     uconsole-hotkey \
     uconsole-idle-lock \
     uconsole-panel \
+    uconsole-shell \
     uconsole-systemd-preset \
     python3-pyqt6 \
     networkmanager \

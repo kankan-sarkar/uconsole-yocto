@@ -4,6 +4,7 @@ import glob
 import os
 import pwd
 import select
+import socket
 import sys
 import subprocess
 import time
@@ -33,6 +34,26 @@ GPS_GPIO_PIN = "27"   # GPS module power rail
 
 CONTROL_PANEL_BIN = "/usr/bin/uconsole-panel"
 POWER_MENU_BIN = "/usr/bin/uconsole-power-menu"
+
+# uconsole-shell's home screen (Dock/search overlay) is a normal user-
+# session Qt/Wayland app, so it can't grab Ctrl+Alt+Space/Ctrl+Tab/
+# Ctrl+1-9 itself -- Wayland deliberately doesn't let one client
+# intercept another's keyboard input. This daemon already reads the
+# physical keyboard directly via evdev (that's how F10/F11/F12 work
+# regardless of what has focus), so it's the only thing that *can*
+# implement global hotkeys here; it just forwards them to
+# uconsole-shell over a local socket instead of handling them itself.
+SHELL_SOCK_PATH = "/run/uconsole-shell.sock"
+
+
+def send_shell_command(command):
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(1.0)
+            s.connect(SHELL_SOCK_PATH)
+            s.sendall((command + "\n").encode())
+    except Exception as e:
+        print(f"Failed to reach uconsole-shell ({command}): {e}")
 
 # Software long-press threshold for a controlled shutdown. Kept
 # shorter than the PMIC's own hardware failsafe (see
@@ -135,6 +156,12 @@ KEY_ACTIONS = {
     "KEY_F12": launch_control_panel,
 }
 
+# uconsole-shell hotkeys. Left and right modifier keys are tracked
+# separately in main()'s ctrl_held/alt_held (either one counts).
+MOD_KEYS_CTRL = {"KEY_LEFTCTRL", "KEY_RIGHTCTRL"}
+MOD_KEYS_ALT = {"KEY_LEFTALT", "KEY_RIGHTALT"}
+NUMBER_KEYS = {f"KEY_{i}": i for i in range(1, 10)}
+
 
 def find_input_devices():
     """Locate the uConsole keyboard and the PMIC power button.
@@ -196,6 +223,8 @@ def main():
 
     power_press_started_at = None
     power_long_press_fired = False
+    ctrl_held = False
+    alt_held = False
 
     while True:
         # Wake at least once a second even with no events so a held
@@ -234,8 +263,26 @@ def main():
                         power_press_started_at = None
                     continue
 
+                if key_event.keycode in MOD_KEYS_CTRL:
+                    ctrl_held = key_event.keystate == key_event.key_down
+                    continue
+                if key_event.keycode in MOD_KEYS_ALT:
+                    alt_held = key_event.keystate == key_event.key_down
+                    continue
+
                 if key_event.keystate != key_event.key_down:
                     continue
+
+                if ctrl_held and alt_held and key_event.keycode == "KEY_SPACE":
+                    send_shell_command("SEARCH")
+                    continue
+                if ctrl_held and key_event.keycode == "KEY_TAB":
+                    send_shell_command("SHOW")
+                    continue
+                if ctrl_held and key_event.keycode in NUMBER_KEYS:
+                    send_shell_command(f"ACTIVATE:{NUMBER_KEYS[key_event.keycode]}")
+                    continue
+
                 action = KEY_ACTIONS.get(key_event.keycode)
                 if action:
                     action()

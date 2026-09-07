@@ -23,6 +23,7 @@ IMAGE_INSTALL += " \
     uconsole-hotkey \
     uconsole-idle-lock \
     uconsole-panel \
+    uconsole-shell \
     uconsole-lora-mqtt-bridge \
     uconsole-splash \
     uconsole-systemd-preset \
