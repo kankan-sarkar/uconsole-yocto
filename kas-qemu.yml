@@ -78,6 +78,21 @@ local_conf_header:
     # whole RPi BSP layer and the SDR layer to satisfy a formality
     # nothing in this reduced image touches.
     LAYERDEPENDS_meta-uconsole-sdr = "core qt6-layer openembedded-layer"
+  qemu_bbappend_mask: |
+    # meta-uconsole-sdr's own BBFILES pattern (recipes-*/*/*.bbappend)
+    # picks up every bbappend in the layer unconditionally, including
+    # ones targeting recipes that only exist in meta-raspberrypi/
+    # meta-sdr/meta-security -- neither of which this config loads.
+    # bitbake hard-errors on a bbappend with no matching recipe
+    # ("No recipes in default available for: ..."), confirmed on the
+    # first real build attempt here. Masked rather than deleted: these
+    # are all real, needed fixes for the actual hardware build, just
+    # not relevant to what this reduced image tests.
+    BBMASK += "meta-uconsole-sdr/recipes-bsp/bootfiles/"
+    BBMASK += "meta-uconsole-sdr/recipes-core/gnuradio/"
+    BBMASK += "meta-uconsole-sdr/recipes-kernel/linux/"
+    BBMASK += "meta-uconsole-sdr/recipes-security/aircrack-ng/"
+    BBMASK += "meta-uconsole-sdr/recipes-support/libhackrf/"
   shared_cache: |
     # Reuses the same downloads/sstate as the maintainer's manual
     # uconsole-cm4 build (see kas-ci-cache.yml for the same pattern) --
