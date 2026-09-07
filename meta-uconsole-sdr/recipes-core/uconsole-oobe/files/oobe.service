@@ -8,6 +8,13 @@ Type=oneshot
 # Ensure it exports the wayland display variable so PyQt6 can connect to Weston
 Environment=WAYLAND_DISPLAY=wayland-1
 Environment=QT_QPA_PLATFORM=wayland
+# Real hardware finding: the on-screen virtual keyboard kept popping up
+# over every text field, even though the uConsole has a real physical
+# keyboard. Qt's input-method integration shows one by default under
+# QT_QPA_PLATFORM=wayland whenever a text-input-capable widget gets
+# focus; an empty QT_IM_MODULE is Qt's own documented way to disable
+# that integration entirely, process-wide.
+Environment=QT_IM_MODULE=
 # Run as root to write to /etc
 User=root
 # Only start if the flag file does NOT exist

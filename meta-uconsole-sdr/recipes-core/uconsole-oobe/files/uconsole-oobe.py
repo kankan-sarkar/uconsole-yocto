@@ -10,7 +10,7 @@ import urllib.request
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QMessageBox, QStackedWidget, QComboBox, QRadioButton,
-    QButtonGroup, QFileDialog,
+    QButtonGroup, QFileDialog, QListWidget, QListWidgetItem,
 )
 from PyQt6.QtCore import Qt
 
@@ -69,13 +69,63 @@ def sync_unix_password(plaintext_pin):
         return False
 
 
+def scan_wifi_networks():
+    """Best-effort Wi-Fi scan via nmcli. Returns a list of
+    (ssid, signal, secured) tuples, deduped by SSID (keeping the
+    strongest signal when the same network is seen from multiple
+    APs), sorted strongest-first. --escape no keeps nmcli from
+    backslash-escaping ':' in field values, so a plain split(":")
+    is safe for any SSID that doesn't itself contain a literal colon."""
+    try:
+        subprocess.run(["nmcli", "device", "wifi", "rescan"], check=False, timeout=10)
+    except Exception as e:
+        print(f"Wi-Fi rescan failed (continuing with cached results): {e}")
+
+    try:
+        result = subprocess.run(
+            ["nmcli", "--terse", "--escape", "no", "-f", "SSID,SIGNAL,SECURITY",
+             "device", "wifi", "list"],
+            capture_output=True, text=True, timeout=10, check=True,
+        )
+    except Exception as e:
+        print(f"Wi-Fi scan failed: {e}")
+        return []
+
+    strongest = {}
+    for line in result.stdout.splitlines():
+        parts = line.split(":")
+        if len(parts) < 3:
+            continue
+        ssid = parts[0].strip()
+        if not ssid:
+            continue
+        try:
+            signal = int(parts[1])
+        except ValueError:
+            signal = 0
+        secured = parts[2].strip() not in ("", "--")
+        if ssid not in strongest or signal > strongest[ssid][0]:
+            strongest[ssid] = (signal, secured)
+
+    return sorted(
+        ((ssid, signal, secured) for ssid, (signal, secured) in strongest.items()),
+        key=lambda entry: entry[1], reverse=True,
+    )
+
+
 def connect_wifi(ssid, password):
     if not ssid:
-        return
+        return False, "no network selected"
     try:
-        subprocess.run(["nmcli", "device", "wifi", "connect", ssid, "password", password], check=False)
+        args = ["nmcli", "device", "wifi", "connect", ssid]
+        if password:
+            args += ["password", password]
+        result = subprocess.run(args, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return True, ""
+        return False, (result.stderr or result.stdout or "unknown error").strip()
     except Exception as e:
-        print(f"Failed to connect Wi-Fi: {e}")
+        return False, str(e)
 
 
 class WizardPage(QWidget):
@@ -214,16 +264,46 @@ class AppsPage(WizardPage):
 
 class NetworkPage(WizardPage):
     def __init__(self):
-        super().__init__("NETWORKING & TELEMETRY", "Both fields are optional and can be configured later.")
+        super().__init__(
+            "NETWORKING & TELEMETRY",
+            "Scan for a Wi-Fi network and connect, or skip -- both this and MQTT "
+            "can be configured later.",
+        )
 
-        self.layout.addWidget(QLabel("Wi-Fi SSID"))
-        self.ssid_input = QLineEdit()
-        self.layout.addWidget(self.ssid_input)
+        self.layout.addWidget(QLabel("Wi-Fi networks"))
+        self.wifi_list = QListWidget()
+        self.wifi_list.setMaximumHeight(160)
+        self.wifi_list.currentItemChanged.connect(self._on_network_selected)
+        self.layout.addWidget(self.wifi_list)
 
-        self.layout.addWidget(QLabel("Wi-Fi password"))
+        scan_row = QHBoxLayout()
+        self.scan_btn = QPushButton("SCAN")
+        self.scan_btn.clicked.connect(self._scan)
+        scan_row.addWidget(self.scan_btn)
+        self.wifi_status_label = QLabel("")
+        self.wifi_status_label.setStyleSheet("color: #c5c6c7;")
+        scan_row.addWidget(self.wifi_status_label, 1)
+        self.layout.addLayout(scan_row)
+
+        connect_row = QHBoxLayout()
         self.wifi_pass_input = QLineEdit()
         self.wifi_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.layout.addWidget(self.wifi_pass_input)
+        self.wifi_pass_input.setPlaceholderText("Wi-Fi password")
+        self.wifi_pass_input.returnPressed.connect(self._connect)
+        self.wifi_pass_input.hide()
+        connect_row.addWidget(self.wifi_pass_input)
+        self.connect_btn = QPushButton("CONNECT")
+        self.connect_btn.clicked.connect(self._connect)
+        self.connect_btn.hide()
+        connect_row.addWidget(self.connect_btn)
+        self.layout.addLayout(connect_row)
+
+        # Deferred to showEvent rather than run here: all six wizard
+        # pages are constructed up front before the wizard's first
+        # page ever appears, so scanning now would freeze the PIN page
+        # behind a several-second Wi-Fi scan before the wizard could
+        # even show up.
+        self._scanned_once = False
 
         self.layout.addWidget(QLabel("Remote MQTT broker host (optional)"))
         self.mqtt_host_input = QLineEdit()
@@ -238,6 +318,53 @@ class NetworkPage(WizardPage):
         self.mqtt_pass_input = QLineEdit()
         self.mqtt_pass_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.layout.addWidget(self.mqtt_pass_input)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._scanned_once:
+            self._scanned_once = True
+            self._scan()
+
+    def _scan(self):
+        self.wifi_status_label.setText("Scanning...")
+        self.wifi_list.clear()
+        self.wifi_pass_input.hide()
+        self.connect_btn.hide()
+        QApplication.processEvents()
+
+        networks = scan_wifi_networks()
+        if not networks:
+            self.wifi_status_label.setText("No networks found.")
+            return
+        for ssid, signal, secured in networks:
+            label = f"{ssid}    {signal}%" + ("  (secured)" if secured else "")
+            item = QListWidgetItem(label)
+            item.setData(Qt.ItemDataRole.UserRole, (ssid, secured))
+            self.wifi_list.addItem(item)
+        self.wifi_status_label.setText(f"{len(networks)} network(s) found.")
+
+    def _on_network_selected(self, current, _previous):
+        self.wifi_pass_input.hide()
+        self.wifi_pass_input.clear()
+        if current is None:
+            self.connect_btn.hide()
+            return
+        _ssid, secured = current.data(Qt.ItemDataRole.UserRole)
+        self.wifi_pass_input.setVisible(secured)
+        self.connect_btn.show()
+
+    def _connect(self):
+        item = self.wifi_list.currentItem()
+        if item is None:
+            return
+        ssid, secured = item.data(Qt.ItemDataRole.UserRole)
+        password = self.wifi_pass_input.text() if secured else ""
+        self.wifi_status_label.setText(f"Connecting to {ssid}...")
+        QApplication.processEvents()
+        ok, detail = connect_wifi(ssid, password)
+        self.wifi_status_label.setText(
+            f"Connected to {ssid}." if ok else f"Failed to connect: {detail}"
+        )
 
 
 class OobeWizard(QWidget):
@@ -268,6 +395,18 @@ class OobeWizard(QWidget):
             self.stack.addWidget(page)
         outer.addWidget(self.stack)
 
+        # Enter advances through text fields like a normal form. The
+        # Wi-Fi password field is the one exception -- Enter there
+        # should try to connect, not skip past it (already wired to
+        # _connect in NetworkPage itself).
+        for page in (self.pin_page, self.profile_page, self.splash_page,
+                     self.theme_page, self.apps_page, self.network_page):
+            wifi_pass = getattr(page, "wifi_pass_input", None)
+            for line_edit in page.findChildren(QLineEdit):
+                if line_edit is wifi_pass:
+                    continue
+                line_edit.returnPressed.connect(self._go_next)
+
         nav = QHBoxLayout()
         self.back_btn = QPushButton("BACK")
         self.back_btn.clicked.connect(self._go_back)
@@ -280,6 +419,24 @@ class OobeWizard(QWidget):
 
         self.setLayout(outer)
         self._update_nav()
+
+    def keyPressEvent(self, event):
+        # Plain Left/Right/Up/Down/PageUp/PageDown are all already
+        # claimed by one form widget or another in this wizard --
+        # QLineEdit for cursor movement, QComboBox and the new Wi-Fi
+        # QListWidget for changing the selected item -- so any of them
+        # would silently do the wrong thing instead of moving between
+        # pages, depending on which field currently has focus. Alt+
+        # Left/Right isn't consumed by any of Qt's own widgets, so it
+        # reaches here reliably no matter what has focus, the same way
+        # Alt+Left/Right means back/forward in every browser.
+        alt = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
+        if alt and event.key() == Qt.Key.Key_Right:
+            self._go_next()
+        elif alt and event.key() == Qt.Key.Key_Left:
+            self._go_back()
+        else:
+            super().keyPressEvent(event)
 
     def _update_nav(self):
         at_last = self.stack.currentIndex() == self.stack.count() - 1
@@ -334,7 +491,9 @@ class OobeWizard(QWidget):
             with open(SETTINGS_FILE, "w") as f:
                 json.dump(settings, f, indent=2)
 
-            connect_wifi(self.network_page.ssid_input.text(), self.network_page.wifi_pass_input.text())
+            # Wi-Fi connection itself already happened (or was skipped)
+            # live on NetworkPage's own CONNECT button, with real
+            # success/failure feedback there -- nothing left to do here.
 
             with open(FLAG_FILE, "w") as f:
                 f.write("COMPLETED")

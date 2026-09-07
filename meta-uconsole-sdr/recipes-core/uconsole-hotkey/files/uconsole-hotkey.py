@@ -100,6 +100,12 @@ def _launch_gui(binary_path, label):
                 "WAYLAND_DISPLAY": "wayland-1",
                 "QT_QPA_PLATFORM": "wayland",
                 "XDG_RUNTIME_DIR": _wayland_runtime_dir(),
+                # Real hardware finding: the on-screen virtual keyboard
+                # kept popping up over every text field despite the
+                # uConsole's real physical keyboard -- an empty
+                # QT_IM_MODULE is Qt's documented way to disable its
+                # input-method integration entirely.
+                "QT_IM_MODULE": "",
             },
         )
     except FileNotFoundError:

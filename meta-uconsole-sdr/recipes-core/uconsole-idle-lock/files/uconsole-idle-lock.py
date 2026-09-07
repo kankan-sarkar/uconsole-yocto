@@ -58,6 +58,11 @@ def spawn_lock_screen():
         WAYLAND_DISPLAY="wayland-1",
         QT_QPA_PLATFORM="wayland",
         XDG_RUNTIME_DIR=_wayland_runtime_dir(),
+        # Same real hardware finding as uconsole-hotkey.py's
+        # _launch_gui: an empty QT_IM_MODULE disables Qt's virtual
+        # keyboard popup, which otherwise appears over every text
+        # field despite the real physical keyboard.
+        QT_IM_MODULE="",
     )
     return subprocess.Popen([LOCK_BIN], env=env)
 
