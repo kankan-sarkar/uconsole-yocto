@@ -28,10 +28,19 @@ are solely responsible for how you use this build.
 - **If you lose the PIN, you lose local administration, permanently**, by
   design (see [requirement.md §7](requirement.md#7-security--access-control)).
   There's no recovery path built into this image short of reflashing.
-- `pam_faillock` (see the `libpam` bbappend) gives a **fixed-delay** lockout
-  on the PAM path (sudo, login, SSH password auth). **True exponential
-  backoff only exists in the custom Qt lock screen** (`uconsole-lock.py`) —
-  brute-force protection on SSH/sudo is weaker than on the on-screen lock.
+- There is **no PAM-level lockout** (sudo, login, SSH password auth) — an
+  earlier `pam_faillock`-wrapped `common-auth` was removed after real testing
+  (QEMU and real hardware both) showed it unconditionally rejected *every*
+  login attempt, including a fresh account on a fresh boot with zero prior
+  failures and a password hash independently verified correct. A completely
+  inaccessible device is a worse outcome than a theoretically brute-forceable
+  one, especially for field debugging, so it was pulled rather than left
+  half-working. **The custom Qt lock screen** (`uconsole-lock.py`) remains
+  the actual, working brute-force protection on this device (true exponential
+  backoff, per [requirement.md §7](requirement.md#7-security--access-control))
+  — it was always the primary control, this was only ever meant to be
+  secondary. SSH/sudo password auth currently has no lockout of its own at
+  all; revisit if that gap matters for your threat model.
 - SSH (`openssh`) is enabled by default via the `ssh-server-openssh` image
   feature. Change the password (i.e. the PIN) from whatever you set at first
   boot before exposing this to any untrusted network, and consider key-only
