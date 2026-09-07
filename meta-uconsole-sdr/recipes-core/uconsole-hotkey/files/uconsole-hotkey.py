@@ -2,6 +2,7 @@
 import evdev
 import glob
 import os
+import pwd
 import select
 import sys
 import subprocess
@@ -72,6 +73,23 @@ def toggle_gpio(pin, label):
         gpio_state[pin] = new_state
 
 
+def _wayland_runtime_dir():
+    # This daemon runs as root (uconsole-hotkey.service has no PAMName,
+    # so systemd never sets XDG_RUNTIME_DIR for it), but Weston itself
+    # runs as its own "weston" user via PAMName=weston-autologin, which
+    # gets pam_systemd's per-user /run/user/<uid> for free -- that's
+    # where its actual wayland-1 socket lives. Root can read into that
+    # 0700 directory fine (root bypasses normal permission checks), it
+    # just first has to be told where to look. Resolved by uid lookup
+    # rather than hardcoding e.g. /run/user/1000, since weston's uid
+    # isn't guaranteed identical across images with different user
+    # lists (uconsole-image vs uconsole-image-qemu-test).
+    try:
+        return f"/run/user/{pwd.getpwnam('weston').pw_uid}"
+    except KeyError:
+        return "/run/user/1000"
+
+
 def _launch_gui(binary_path, label):
     print(f"Summoning {label}")
     try:
@@ -81,6 +99,7 @@ def _launch_gui(binary_path, label):
                 **os.environ,
                 "WAYLAND_DISPLAY": "wayland-1",
                 "QT_QPA_PLATFORM": "wayland",
+                "XDG_RUNTIME_DIR": _wayland_runtime_dir(),
             },
         )
     except FileNotFoundError:

@@ -13,7 +13,18 @@ S = "${WORKDIR}"
 
 inherit systemd
 
-RDEPENDS:${PN} = "python3-core python3-pyqt6 networkmanager python3-networkmanager shadow plymouth weston weston-init uconsole-theme"
+# Real crash, found via QEMU testing: qt.qpa.plugin: Could not find the
+# Qt platform plugin "wayland" in "" -- oobe.service sets
+# QT_QPA_PLATFORM=wayland (see oobe.service), but nothing pulled in the
+# actual plugin .so that implements it. meta-qt6's own qt6.inc packages
+# every Qt6 plugin (the wayland QPA backend included) into
+# ${PN}-plugins for each Qt6 recipe, not into the recipe's main
+# package -- confirmed by reading qt6.inc's own FILES:${PN}-plugins
+# definition. python3-pyqt6 depends on qtbase/qtdeclarative for its
+# bindings, but never on qtwayland, since PyQt6 itself is platform-
+# agnostic; something consuming it under Wayland has to pull the
+# plugin in explicitly.
+RDEPENDS:${PN} = "python3-core python3-pyqt6 qtwayland-plugins networkmanager python3-networkmanager shadow plymouth weston weston-init uconsole-theme"
 
 SYSTEMD_SERVICE:${PN} = "oobe.service"
 

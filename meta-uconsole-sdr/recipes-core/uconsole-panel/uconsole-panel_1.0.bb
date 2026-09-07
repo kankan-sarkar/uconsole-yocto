@@ -14,7 +14,11 @@ SRC_URI = " \
 
 S = "${WORKDIR}"
 
-RDEPENDS:${PN} = "python3-core python3-pyqt6 libgpiod-tools networkmanager rfkill uconsole-theme"
+# Same real bug as uconsole-oobe (see its RDEPENDS comment): this panel
+# is also a PyQt6 app run under QT_QPA_PLATFORM=wayland (set by
+# uconsole-hotkey when it launches it), so it needs the same
+# qtwayland-plugins dependency for the actual Wayland QPA plugin .so.
+RDEPENDS:${PN} = "python3-core python3-pyqt6 qtwayland-plugins libgpiod-tools networkmanager rfkill uconsole-theme"
 
 do_install() {
     install -d ${D}${bindir}

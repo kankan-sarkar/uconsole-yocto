@@ -98,7 +98,7 @@ EXTRA_USERS_PARAMS = "\
 # function's own text (what bitbake hashes) is now a fixed string,
 # while the actual timestamp is still produced fresh at real
 # execution time, not at parse time.
-UCONSOLE_IMAGE_VERSION = "1.0.0e"
+UCONSOLE_IMAGE_VERSION = "1.0.0f"
 
 uconsole_write_version_banner () {
     build_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")

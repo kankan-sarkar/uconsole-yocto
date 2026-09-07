@@ -12,7 +12,19 @@ Environment=QT_QPA_PLATFORM=wayland
 User=root
 # Only start if the flag file does NOT exist
 ConditionPathExists=!/etc/.oobe_completed
-ExecStart=/usr/bin/uconsole-oobe
+# Real crash, found via QEMU testing: "XDG_RUNTIME_DIR not set in the
+# environment" / "Failed to create wl_display". This unit runs as
+# root with no PAMName, so systemd never gives it an XDG_RUNTIME_DIR
+# -- but weston.service runs Weston as its own "weston" user via
+# PAMName=weston-autologin, which gets pam_systemd's per-user
+# /run/user/<uid> for free, and that's where the real wayland-1
+# socket lives. Root can read into that 0700 directory fine (root
+# bypasses normal permission checks); it just has to be told where to
+# look. Resolved by uid lookup at start time rather than a hardcoded
+# /run/user/1000, since weston's uid isn't guaranteed identical across
+# images with different user lists (uconsole-image vs
+# uconsole-image-qemu-test).
+ExecStart=/bin/sh -c 'export XDG_RUNTIME_DIR=/run/user/$(id -u weston); exec /usr/bin/uconsole-oobe'
 
 [Install]
 WantedBy=graphical.target

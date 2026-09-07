@@ -2,6 +2,7 @@
 import glob
 import json
 import os
+import pwd
 import select
 import subprocess
 import time
@@ -40,8 +41,24 @@ def backlight_off(off):
             print(f"Failed to set backlight power on {path}: {e}")
 
 
+def _wayland_runtime_dir():
+    # Same real bug as uconsole-hotkey.py's _launch_gui (see its
+    # comment): this daemon runs as root with no PAMName, so it never
+    # gets XDG_RUNTIME_DIR, but Weston's actual wayland-1 socket lives
+    # under its own "weston" user's pam_systemd-provided runtime dir.
+    try:
+        return f"/run/user/{pwd.getpwnam('weston').pw_uid}"
+    except KeyError:
+        return "/run/user/1000"
+
+
 def spawn_lock_screen():
-    env = dict(os.environ, WAYLAND_DISPLAY="wayland-1", QT_QPA_PLATFORM="wayland")
+    env = dict(
+        os.environ,
+        WAYLAND_DISPLAY="wayland-1",
+        QT_QPA_PLATFORM="wayland",
+        XDG_RUNTIME_DIR=_wayland_runtime_dir(),
+    )
     return subprocess.Popen([LOCK_BIN], env=env)
 
 
