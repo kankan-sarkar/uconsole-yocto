@@ -37,6 +37,21 @@ On an 8GB or smaller build host, edit `kas-project.yml`'s `performance`
 block and set `BB_NUMBER_THREADS`/`PARALLEL_MAKE` to `"2"` first, to avoid
 OOM kills mid-build.
 
+### Verifying in QEMU before flashing real hardware
+
+`scripts/run-qemu-test.sh` builds and boots a lean `qemux86-64` sanity image
+(no SDR/RF toolchain, nothing hardware-specific — see its own header
+comment for exactly what it can and can't catch) in minutes instead of a
+full flash cycle. On a build host with its own display, it just opens a
+normal QEMU window:
+
+```bash
+./scripts/run-qemu-test.sh
+```
+
+Pass `--vnc` instead if you ever need to check it from a different
+machine, or `--nographic` for serial-only output with no display at all.
+
 ## Repo layout
 
 | Path | What |
@@ -59,10 +74,58 @@ read every recipe up front.
 Two GitHub-hosted jobs run on every push/PR: a lint pass and a
 `bitbake -n` dependency-resolution pass (no compilation — see
 `.github/workflows/`). A third workflow, `build.yml`, runs a real
-`kas build` on a self-hosted runner registered against this repo — see
-the comments in that file for how to set one up on your own build
-machine. It only triggers on pushes to `main`, never on pull requests, so
-a public fork can't run code on your hardware.
+`kas build` on a self-hosted runner registered against this repo. It
+only triggers on pushes to `main`, never on pull requests, so a public
+fork can't run code on your hardware.
+
+### Setting up the self-hosted runner on your own build machine
+
+1. **Install the host dependencies** from
+   [requirement.md §2](requirement.md#2-recreating-the-build-process-host-environment)
+   (locales, the apt package list, `kas`) and do one full manual
+   `kas build kas-project.yml` first — this is also how you populate
+   `build/downloads` and `build/sstate-cache` so the CI runner isn't
+   starting cold on every push (see `kas-ci-cache.yml`'s comment).
+
+2. **Register a runner**: on GitHub, go to this repo's
+   **Settings → Actions → Runners → New self-hosted runner**, pick
+   Linux/x64, and follow the download + `./config.sh` commands it
+   generates — they include a one-time registration token, so copy
+   them from the page rather than reusing the ones below verbatim.
+   When `config.sh` asks for labels, add `yocto-build` (required —
+   `build.yml` targets `runs-on: [self-hosted, yocto-build]`); a
+   runner name matching the machine's hostname makes multi-runner
+   setups easier to read later.
+
+   ```bash
+   mkdir ~/actions-runner && cd ~/actions-runner
+   curl -o actions-runner-linux-x64.tar.gz -L <URL from the GitHub page>
+   tar xzf actions-runner-linux-x64.tar.gz
+   ./config.sh --url https://github.com/<owner>/<repo> --token <TOKEN> --labels yocto-build
+   ```
+
+3. **Install it as a service** so it survives reboots and doesn't need
+   a terminal left open:
+
+   ```bash
+   sudo ./svc.sh install
+   sudo ./svc.sh start
+   ```
+
+4. **Point the cache paths at this machine's actual checkout.**
+   `kas-ci-cache.yml` and `.github/workflows/build.yml` both hardcode
+   the previous build machine's paths (a specific mount point and
+   Python venv location) — update both to match where you did step 1's
+   manual build and where `kas`/its venv actually live on this host.
+
+5. **Live-viewing a build**: `build.yml` launches `kas build` inside a
+   detached tmux session named `gh-actions-yocto-build` on the runner
+   (rather than as the workflow step's own captured subprocess) —
+   `tmux attach -t gh-actions-yocto-build` from that machine shows it
+   live with a real tty. Optional: set up
+   [ttyd](https://github.com/tsl0922/ttyd) pointed at that same
+   session for a web-based view without needing your own SSH access to
+   the runner.
 
 ## Status
 

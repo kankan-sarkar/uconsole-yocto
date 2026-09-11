@@ -81,7 +81,7 @@ jobs:
           # if the session already existed (manual testing, or ttyd's
           # service creating it first), it keeps whatever cwd it started
           # with -- which is how kas ended up trying to mkdir /build.
-          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && source /mnt/ssd-drive/yocto-experiments/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
+          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && source /home/kankan/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do

@@ -6,15 +6,19 @@
 # root (where kas-qemu.yml lives).
 #
 # Usage:
-#   ./scripts/run-qemu-test.sh            # build (only if needed) + boot
-#   ./scripts/run-qemu-test.sh --build    # force a rebuild first
-#   ./scripts/run-qemu-test.sh --no-vnc   # serial/terminal only, no display
+#   ./scripts/run-qemu-test.sh              # build (only if needed) + boot in a local window
+#   ./scripts/run-qemu-test.sh --build      # force a rebuild first
+#   ./scripts/run-qemu-test.sh --vnc        # bind QEMU's VNC server instead, for viewing remotely
+#   ./scripts/run-qemu-test.sh --nographic  # serial/terminal only, no display at all
 #
-# Display: defaults to QEMU's VNC server bound to all interfaces
-# (runqemu's "publicvnc" keyword) since hs01 is a headless box reached
-# over SSH -- point any VNC client at hs01:5901 (display :1) to see
-# the actual Weston/OOBE framebuffer. Boot/kernel/systemd messages
-# still print directly to this terminal either way.
+# Display: defaults to a plain local QEMU window (runqemu's normal
+# behavior when no display keyword is given) -- the build host is now
+# an Ubuntu Desktop machine with its own screen, not a headless box
+# only reachable over SSH, so there's no need to tunnel VNC just to
+# see the framebuffer. --vnc brings back the old publicvnc behavior
+# (bind :5901 on all interfaces) for the rare case of checking this
+# from a different machine. Boot/kernel/systemd messages print
+# directly to this terminal regardless of display mode.
 
 set -euo pipefail
 
@@ -22,12 +26,13 @@ cd "$(dirname "$0")/.."
 
 BUILD_DIR="build-qemu-test"
 FORCE_BUILD=0
-DISPLAY_ARGS="publicvnc"
+DISPLAY_ARGS=""
 
 for arg in "$@"; do
     case "$arg" in
         --build) FORCE_BUILD=1 ;;
-        --no-vnc) DISPLAY_ARGS="nographic" ;;
+        --vnc) DISPLAY_ARGS="publicvnc" ;;
+        --nographic|--no-vnc) DISPLAY_ARGS="nographic" ;;
         *) echo "Unknown argument: $arg" >&2; exit 1 ;;
     esac
 done

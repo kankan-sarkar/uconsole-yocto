@@ -92,22 +92,23 @@ local_conf_header:
     DISTRO_FEATURES_BACKFILL_CONSIDERED = "sysvinit"
     VIRTUAL-RUNTIME_initscripts = ""
   performance: |
-    # hs01 was bumped to 16GB RAM after a real OOM event (confirmed via
-    # dmesg: 3 kills in under a minute at the old 7.5GB, including
-    # cc1plus doing real compile work and the bash shell running the
-    # build itself) -- back to full core count rather than the
-    # temporary cap of 2. hs01's CPU (Intel N100) is a fixed 4-core/
-    # 4-thread part with no unlocked multiplier, so cpu_count() here
-    # already resolves to the real ceiling; there's no more genuine
-    # parallelism to extract from this chip regardless of RAM.
+    # Build host migrated from hs01 (Intel N100, a fixed 4-core/
+    # 4-thread part with no headroom -- already OOM'd once at 7.5GB,
+    # bumped to 16GB just to stay stable at that low core count) to an
+    # HP EliteBook 850 G8: i7-1165G7 (4C/8T), 32GB RAM. cpu_count()
+    # below auto-detects whatever the current host actually has, so
+    # this already resolves to 8 with no manual retuning -- the real
+    # gain over hs01 isn't just 2x the threads, it's 32GB giving each
+    # parallel cc1plus/ld job far more headroom before hitting the
+    # kind of memory pressure that caused hs01's OOM kills.
     BB_NUMBER_THREADS ?= "${@oe.utils.cpu_count()}"
     PARALLEL_MAKE ?= "-j ${@oe.utils.cpu_count()}"
 
     # No BB_PRESSURE_MAX_* -- previously had CPU/IO/MEMORY pressure
     # throttling as an OOM safety net (see git history), removed now
-    # that hs01 has its own live CPU/RAM/disk/temp dashboard being
-    # watched directly: full, unthrottled parallelism, trading the
-    # automated backoff for manual oversight instead.
+    # that the build host has its own live CPU/RAM/disk/temp dashboard
+    # being watched directly: full, unthrottled parallelism, trading
+    # the automated backoff for manual oversight instead.
   sdr_layer_qt5_override: |
     # meta-sdr/conf/layer.conf unconditionally declares
     # LAYERDEPENDS_sdr-layer with qt5-layer in it, so bitbake refuses

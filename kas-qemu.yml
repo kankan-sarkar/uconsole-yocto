@@ -99,5 +99,5 @@ local_conf_header:
     # sstate objects are content-hashed per machine/arch, so sharing
     # one directory across two different MACHINE targets is safe, not
     # just convenient: entries from each build simply coexist.
-    DL_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/downloads"
-    SSTATE_DIR = "/mnt/ssd-drive/yocto-experiments/UconsoleYocto/build/sstate-cache"
+    DL_DIR = "/home/kankan/UconsoleYocto/build/downloads"
+    SSTATE_DIR = "/home/kankan/UconsoleYocto/build/sstate-cache"

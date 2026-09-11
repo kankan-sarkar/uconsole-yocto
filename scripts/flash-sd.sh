@@ -1,6 +1,6 @@
 #!/bin/bash
 # Flash a uConsole Yocto image onto an SD card, with safety checks and
-# a full progress report. Designed to run on the build host (hs01).
+# a full progress report. Designed to run on the build host.
 #
 # Usage:
 #   flash-sd.sh <sd-card-device> [image-file]
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-DEFAULT_IMAGE="/mnt/ssd-drive/yocto-experiments/UconsoleYocto/actions-runner/_work/uconsole-yocto/uconsole-yocto/build/tmp/deploy/images/uconsole-cm4/uconsole-image-uconsole-cm4.wic.bz2"
+DEFAULT_IMAGE="/home/kankan/actions-runner/_work/uconsole-yocto/uconsole-yocto/build/tmp/deploy/images/uconsole-cm4/uconsole-image-uconsole-cm4.wic.bz2"
 
 usage() {
     cat >&2 <<EOF

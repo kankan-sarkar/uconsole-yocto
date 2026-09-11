@@ -21,7 +21,7 @@ Yocto builds are resource-intensive. Your local development machine must meet th
 ---
 
 ## 2. Recreating the Build Process (Host Environment)
-To rebuild this custom OS from scratch, a headless Linux host (Debian/Ubuntu 22.04+) is required. Due to the intensive nature of cross-compiling the Linux kernel and Qt6, the host should ideally have 16GB+ RAM. If using an 8GB machine (e.g. Intel N100), you **must** restrict thread counts to prevent Out-Of-Memory (OOM) crashes.
+To rebuild this custom OS from scratch, a Linux host (Debian/Ubuntu 22.04+) is required -- headless or with a desktop GUI both work fine; a local display is actually convenient for verifying `scripts/run-qemu-test.sh` visually before flashing real hardware (see its own usage comment). Due to the intensive nature of cross-compiling the Linux kernel and Qt6, the host should ideally have 16GB+ RAM. `kas-project.yml`'s `performance` block auto-detects core count via `oe.utils.cpu_count()`, so nothing needs manual tuning on a reasonably modern machine -- but on a small/older host (8GB RAM or a low-core-count CPU like an Intel N100), you **must** restrict `BB_NUMBER_THREADS`/`PARALLEL_MAKE` to a low fixed number there to prevent Out-Of-Memory (OOM) crashes.
 
 ### 2.1 Install Dependencies
 Install the required host dependencies to compile cross-toolchains, kernels, and C/C++ applications:
@@ -30,7 +30,7 @@ sudo apt-get update
 sudo apt-get install gawk wget git diffstat unzip texinfo gcc \
 build-essential chrpath socat cpio python3 python3-pip python3-pexpect \
 xz-utils debianutils iputils-ping python3-git python3-jinja2 libegl-dev libsdl2-dev \
-pylint xterm python3-subunit mesa-common-dev zstd liblz4-tool locales
+pylint xterm python3-subunit mesa-common-dev zstd lz4 locales
 ```
 
 ### 2.2 Configure Locales & AppArmor (Crucial for Ubuntu 24.04+)
