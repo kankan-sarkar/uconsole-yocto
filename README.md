@@ -135,10 +135,58 @@ fork can't run code on your hardware.
    detached tmux session named `gh-actions-yocto-build` on the runner
    (rather than as the workflow step's own captured subprocess) —
    `tmux attach -t gh-actions-yocto-build` from that machine shows it
-   live with a real tty. Optional: set up
-   [ttyd](https://github.com/tsl0922/ttyd) pointed at that same
-   session for a web-based view without needing your own SSH access to
-   the runner.
+   live with a real tty. Keep ad-hoc manual builds in a *different*
+   session: the workflow types into that one, so a manual build
+   sitting in it will collide.
+
+### Watching builds and grabbing failure logs
+
+Copying a failure out of a Yocto build is otherwise genuinely annoying
+— the build runs in tmux (so mouse selection fights the multiplexer),
+the console log is thousands of lines, and the line that matters is
+usually in a per-task logfile that the console output merely points at.
+
+`scripts/build-log-server.py` serves the logs as plain text, so
+select-all/copy just works:
+
+```bash
+./scripts/build-log-server.py --build-dir build --port 8080
+# several trees (a manual checkout plus a runner's own _work checkout):
+#   --build-dir build --build-dir ~/actions-runner/_work/<repo>/<repo>/build
+# it always shows whichever built most recently
+```
+
+| Endpoint | What |
+|---|---|
+| `/errors` | **The one to copy when reporting a failure** — ERROR/WARNING lines plus the full contents of every per-task logfile bitbake referenced |
+| `/tail?n=200` | Last n console lines — is it still moving? |
+| `/console` | The entire console log |
+
+It's read-only by construction (serves file contents, runs nothing), and
+defaults to binding `0.0.0.0` for LAN access — pass `--host 127.0.0.1`
+to keep it local. Logs aren't usually sensitive but do contain absolute
+paths and package versions, so don't expose it to an untrusted network.
+
+For a live terminal in the browser, [ttyd](https://github.com/tsl0922/ttyd)
+works well alongside it:
+
+```bash
+ttyd -p 7681 -R tmux attach -t gh-actions-yocto-build
+```
+
+Two things worth knowing there. `-R` makes it **read-only** — a stray
+keystroke into a live bitbake pane is an easy way to wreck a build. And
+attaching a browser resizes the tmux window to the smallest client,
+which mangles bitbake's progress display for everyone; pin it with
+`tmux set-option -t <session> window-size manual` (tmux 3.1+).
+
+On Debian/Ubuntu, note that the `ttyd` apt package ships its own
+`ttyd.service` that auto-starts on port 7681 serving a login prompt —
+`sudo systemctl disable --now ttyd.service` before running your own on
+that port, or it'll fail to bind.
+
+Both of these are per-machine plumbing, so their systemd units live on
+the build host rather than in this repo.
 
 ## Status
 
