@@ -18,7 +18,8 @@ inherit pkgconfig
 # it disable the other (unavailable) SDR backends.
 #
 # ARCH must be passed explicitly: the Makefile defaults it to
-# `uname -m` (the *build host's* architecture, x86_64 on hs01) via
+# `uname -m` (the *build host's* architecture, x86_64 rather than the
+# aarch64 target) via
 # `ARCH ?= $(shell uname -m)`, used to pick both the DSP "starch mix"
 # and, via Makefile.cpufeatures (CPUFEATURES_ARCH ?= $(ARCH)), which
 # cpu_features backend to compile. Without this override it silently

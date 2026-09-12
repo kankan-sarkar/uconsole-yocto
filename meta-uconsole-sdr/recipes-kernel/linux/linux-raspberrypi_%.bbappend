@@ -106,7 +106,7 @@ do_configure:append() {
     # task runs in already has the correct kernel-internal ARCH value
     # (arm64, not bitbake's own TARGET_ARCH "aarch64") exported by
     # kernel.bbclass for the whole recipe -- confirmed by hand on
-    # hs01 that overriding it is unnecessary and risks getting it
+    # the build host that overriding it is unnecessary and risks getting it
     # wrong (bitbake's ${ARCH} variable resolves to "aarch64", which
     # the kernel's own Makefile doesn't recognize).
     yes '' | oe_runmake -C ${S} O=${B} olddefconfig

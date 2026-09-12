@@ -12,13 +12,12 @@
 #   ./scripts/run-qemu-test.sh --nographic  # serial/terminal only, no display at all
 #
 # Display: defaults to a plain local QEMU window (runqemu's normal
-# behavior when no display keyword is given) -- the build host is now
-# an Ubuntu Desktop machine with its own screen, not a headless box
-# only reachable over SSH, so there's no need to tunnel VNC just to
-# see the framebuffer. --vnc brings back the old publicvnc behavior
-# (bind :5901 on all interfaces) for the rare case of checking this
-# from a different machine. Boot/kernel/systemd messages print
-# directly to this terminal regardless of display mode.
+# behavior when no display keyword is given), which is what you want on
+# a build host with its own screen. --vnc instead binds QEMU's VNC
+# server on all interfaces (display :1, port 5901) for viewing from
+# another machine -- the mode to use on a headless box reachable only
+# over SSH. Boot/kernel/systemd messages print directly to this
+# terminal regardless of display mode.
 
 set -euo pipefail
 
@@ -49,8 +48,10 @@ else
     echo "==> Found existing build output, skipping build (use --build to force a rebuild)"
 fi
 
-echo "==> Booting under QEMU (kvm, $DISPLAY_ARGS, slirp networking)"
-echo "    VNC clients: connect to hs01:5901 if using the default display mode."
+echo "==> Booting under QEMU (kvm, ${DISPLAY_ARGS:-local window}, slirp networking)"
+if [ "$DISPLAY_ARGS" = "publicvnc" ]; then
+    echo "    VNC server is bound on all interfaces -- point a client at this host, display :1 (port 5901)."
+fi
 # qemux86-64's own default qemuboot.conf allocates only 256MB. Real
 # hardware has 4GB (requirement.md), and this image can now run two
 # PyQt6/Wayland clients at once (uconsole-shell plus whatever's

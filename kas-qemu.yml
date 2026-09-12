@@ -8,7 +8,7 @@
 #
 # qemux86-64 rather than qemuarm64 deliberately: this is testing
 # generic systemd/PAM/Weston wiring, not anything CPU-architecture-
-# specific, and hs01 (an x86_64 host) can run qemux86-64 under real
+# specific, and an x86_64 build host can run qemux86-64 under real
 # KVM acceleration -- qemuarm64 on an x86 host falls back to slow
 # software-only TCG emulation, which would defeat the entire point of
 # this being a *fast* iteration loop.
@@ -94,10 +94,22 @@ local_conf_header:
     BBMASK += "meta-uconsole-sdr/recipes-security/aircrack-ng/"
     BBMASK += "meta-uconsole-sdr/recipes-support/libhackrf/"
   shared_cache: |
-    # Reuses the same downloads/sstate as the maintainer's manual
-    # uconsole-cm4 build (see kas-ci-cache.yml for the same pattern) --
-    # sstate objects are content-hashed per machine/arch, so sharing
-    # one directory across two different MACHINE targets is safe, not
-    # just convenient: entries from each build simply coexist.
-    DL_DIR = "/home/kankan/UconsoleYocto/build/downloads"
-    SSTATE_DIR = "/home/kankan/UconsoleYocto/build/sstate-cache"
+    # Reuses the same downloads/sstate as the normal uconsole-cm4 build
+    # in this same checkout -- sstate objects are content-hashed per
+    # machine/arch, so sharing one directory across two different
+    # MACHINE targets is safe, not just convenient: entries from each
+    # build simply coexist, and the qemu image doesn't re-fetch tarballs
+    # the hardware build already has.
+    #
+    # Expressed relative to TOPDIR (this build's own directory) rather
+    # than as an absolute path, so it works in any checkout without
+    # edits: run-qemu-test.sh sets KAS_BUILD_DIR=build-qemu-test, so
+    # ${TOPDIR}/.. is the repo root and ${TOPDIR}/../build is the
+    # default build dir `kas build kas-project.yml` uses.
+    #
+    # To point these somewhere else entirely (a shared cache on another
+    # disk, say), export DL_DIR/SSTATE_DIR before invoking kas --
+    # bitbake lists both in BB_ENV_PASSTHROUGH_ADDITIONS, so the
+    # environment wins over what's set here.
+    DL_DIR ?= "${TOPDIR}/../build/downloads"
+    SSTATE_DIR ?= "${TOPDIR}/../build/sstate-cache"

@@ -17,11 +17,21 @@ name: Yocto full build (self-hosted)
 # the current one to finish instead of cancelling it or running alongside
 # it.
 #
-# Builds with kas-ci-cache.yml layered on top of kas-project.yml, which
-# points DL_DIR/SSTATE_DIR at the maintainer's existing manual-build
-# cache on the same machine, so this doesn't start cold (and doesn't
-# duplicate 250GB+ of downloads/sstate) on every run. See that file's
-# comments if the build machine's paths ever change.
+# Sharing a download/sstate cache with an existing manual build on the
+# same machine (so CI doesn't start cold, or duplicate 250GB+ of
+# downloads and sstate on every run) is done through the environment,
+# not through anything committed here: bitbake lists DL_DIR and
+# SSTATE_DIR in BB_ENV_PASSTHROUGH_ADDITIONS, so exporting them for the
+# runner is enough. The runner reads an optional `.env` file in its own
+# install directory, which is the natural place for it:
+#
+#     # ~/actions-runner/.env
+#     DL_DIR=/path/to/shared/downloads
+#     SSTATE_DIR=/path/to/shared/sstate-cache
+#
+# Deliberately kept out of the repo so no machine's paths or usernames
+# are baked into a public tree. Without it, the build still works --
+# it just uses this checkout's own build/ directory for both.
 
 on:
   push:
@@ -81,7 +91,16 @@ jobs:
           # if the session already existed (manual testing, or ttyd's
           # service creating it first), it keeps whatever cwd it started
           # with -- which is how kas ended up trying to mkdir /build.
-          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && source /home/kankan/.venv/bin/activate && kas build kas-project.yml:kas-ci-cache.yml; echo \$? > $MARKER" Enter
+          # KAS_VENV is optional: set it in the runner's .env if kas was
+          # installed into a virtualenv rather than onto the system PATH.
+          # A fresh tmux shell doesn't inherit the runner service's own
+          # PATH, so the venv has to be activated explicitly here.
+          ACTIVATE=""
+          if [ -n "${KAS_VENV:-}" ]; then
+            ACTIVATE="source ${KAS_VENV}/bin/activate && "
+          fi
+
+          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && ${ACTIVATE}kas build kas-project.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do

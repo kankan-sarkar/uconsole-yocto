@@ -79,11 +79,11 @@ config.txt, keyboard firmware, schematics) and their kernel fork
   none. `RPI_EXTRA_CONFIG` also gained `ignore_lcd=1` and
   `max_framebuffers=2` from the same reference config.txt.
 
-## Verified against the real build on hs01
+## Verified against the real build
 
 The first CI run after this change succeeded, but "the build succeeded"
 turned out not to mean "the config actually landed" -- checked
-directly on hs01 rather than trusting that:
+directly on the build host rather than trusting that:
 
 * The `sed`-based Kconfig/Makefile/overlay wiring in
   `linux-raspberrypi_%.bbappend` **did** land correctly in the real
@@ -113,7 +113,7 @@ directly on hs01 rather than trusting that:
 * **Second round, same lesson, different mechanism.** After promoting
   `BACKLIGHT_CLASS_DEVICE=y`, `DRM_PANEL_CWU50` and `BACKLIGHT_OCP8178`
   were *still* silently "not set" -- but this time not from an unmet
-  Kconfig dependency. Verified by hand on hs01: force-setting both
+  Kconfig dependency. Verified by hand on the build host: force-setting both
   with the kernel's own `scripts/config` and re-running a real
   `make olddefconfig` against the exact same `.config` kept them `=y`
   with no complaint, proving both symbols' actual dependencies were

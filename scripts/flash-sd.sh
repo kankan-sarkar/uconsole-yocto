@@ -9,16 +9,24 @@
 #                      Must be the whole disk, NOT a partition
 #                      (/dev/sdb, not /dev/sdb1).
 #   [image-file]       Path to a .wic / .wic.bz2 / .wic.gz image.
-#                      Defaults to the CI runner's most recent
-#                      uconsole-image build if omitted.
+#                      Defaults to this checkout's own build output, or
+#                      $UCONSOLE_IMAGE if that's set.
 #
 # Examples:
 #   ./flash-sd.sh /dev/sdb
 #   ./flash-sd.sh /dev/sdb /path/to/uconsole-image-uconsole-cm4.wic.bz2
+#   UCONSOLE_IMAGE=~/actions-runner/_work/.../uconsole-image-uconsole-cm4.wic.bz2 ./flash-sd.sh /dev/sdb
 
 set -euo pipefail
 
-DEFAULT_IMAGE="/home/kankan/actions-runner/_work/uconsole-yocto/uconsole-yocto/build/tmp/deploy/images/uconsole-cm4/uconsole-image-uconsole-cm4.wic.bz2"
+# Defaults to the image this checkout's own `kas build kas-project.yml`
+# produces. Resolved relative to this script so it works from any
+# checkout, rather than hardcoding one machine's layout. Override with
+# UCONSOLE_IMAGE=/path/to/image.wic.bz2 (or pass the image as the second
+# argument) to flash a build from somewhere else -- a CI runner's own
+# _work checkout, for instance.
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DEFAULT_IMAGE="${UCONSOLE_IMAGE:-$REPO_ROOT/build/tmp/deploy/images/uconsole-cm4/uconsole-image-uconsole-cm4.wic.bz2}"
 
 usage() {
     cat >&2 <<EOF

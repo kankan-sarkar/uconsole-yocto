@@ -83,9 +83,9 @@ fork can't run code on your hardware.
 1. **Install the host dependencies** from
    [requirement.md §2](requirement.md#2-recreating-the-build-process-host-environment)
    (locales, the apt package list, `kas`) and do one full manual
-   `kas build kas-project.yml` first — this is also how you populate
-   `build/downloads` and `build/sstate-cache` so the CI runner isn't
-   starting cold on every push (see `kas-ci-cache.yml`'s comment).
+   `kas build kas-project.yml` first, so the runner has a warm
+   download/sstate cache to reuse rather than starting cold on every
+   push (see step 4).
 
 2. **Register a runner**: on GitHub, go to this repo's
    **Settings → Actions → Runners → New self-hosted runner**, pick
@@ -112,11 +112,24 @@ fork can't run code on your hardware.
    sudo ./svc.sh start
    ```
 
-4. **Point the cache paths at this machine's actual checkout.**
-   `kas-ci-cache.yml` and `.github/workflows/build.yml` both hardcode
-   the previous build machine's paths (a specific mount point and
-   Python venv location) — update both to match where you did step 1's
-   manual build and where `kas`/its venv actually live on this host.
+4. **(Optional) Share the cache with your manual build.** The runner
+   does its own `actions/checkout` into a separate directory, so by
+   default it builds into *that* checkout's `build/` and won't see the
+   downloads/sstate from step 1. Point both at a shared location via
+   the runner's own `.env` file — bitbake lists `DL_DIR` and
+   `SSTATE_DIR` in `BB_ENV_PASSTHROUGH_ADDITIONS`, so the environment
+   is enough and nothing machine-specific needs committing:
+
+   ```bash
+   # ~/actions-runner/.env
+   DL_DIR=/path/to/your/checkout/build/downloads
+   SSTATE_DIR=/path/to/your/checkout/build/sstate-cache
+   ```
+
+   The same file is where to set `KAS_VENV=/path/to/venv` if you
+   installed `kas` into a virtualenv rather than onto the system
+   `PATH` — a fresh tmux shell won't inherit the runner service's
+   own `PATH`, so `build.yml` activates it explicitly when that's set.
 
 5. **Live-viewing a build**: `build.yml` launches `kas build` inside a
    detached tmux session named `gh-actions-yocto-build` on the runner
