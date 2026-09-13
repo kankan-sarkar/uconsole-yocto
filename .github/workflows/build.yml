@@ -39,6 +39,9 @@ on:
     paths:
       - "kas-project.yml"
       - "meta-uconsole-sdr/**"
+      # So a fix to the build plumbing itself gets exercised.
+      - ".github/workflows/build.yml"
+      - "scripts/ci-build.sh"
   workflow_dispatch:
 
 concurrency:
@@ -83,24 +86,24 @@ jobs:
 
           tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION" -x 220 -y 50
 
-          # A fresh tmux shell doesn't inherit the runner service's own
-          # PATH (which has .venv/bin baked in from whatever environment
-          # was active when the service was installed) -- activate it
-          # explicitly rather than relying on that. Also `cd` explicitly
-          # rather than assuming the pane starts in $GITHUB_WORKSPACE:
-          # if the session already existed (manual testing, or ttyd's
-          # service creating it first), it keeps whatever cwd it started
-          # with -- which is how kas ended up trying to mkdir /build.
-          # KAS_VENV is optional: set it in the runner's .env if kas was
-          # installed into a virtualenv rather than onto the system PATH.
-          # A fresh tmux shell doesn't inherit the runner service's own
-          # PATH, so the venv has to be activated explicitly here.
-          ACTIVATE=""
-          if [ -n "${KAS_VENV:-}" ]; then
-            ACTIVATE="source ${KAS_VENV}/bin/activate && "
-          fi
-
-          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && ${ACTIVATE}kas build kas-project.yml; echo \$? > $MARKER" Enter
+          # The build itself lives in scripts/ci-build.sh rather than in
+          # this string: everything here has to survive two rounds of
+          # shell quoting on its way through `tmux send-keys`, and that
+          # is not a place to put logic. The script also retries the
+          # fetch phase, which the upstream Yocto git servers make
+          # necessary more often than you'd like.
+          #
+          # `cd` explicitly rather than assuming the pane starts in
+          # $GITHUB_WORKSPACE: if the session already existed (manual
+          # testing, or ttyd creating it first), it keeps whatever cwd
+          # it started with -- which is how kas once ended up trying to
+          # mkdir /build.
+          #
+          # KAS_VENV is passed as a one-shot variable because a fresh
+          # tmux shell doesn't inherit the runner service's environment.
+          # It's optional: set it in the runner's .env if kas lives in a
+          # virtualenv rather than on the system PATH.
+          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && KAS_VENV='${KAS_VENV:-}' ./scripts/ci-build.sh kas-project.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do
