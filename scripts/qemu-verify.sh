@@ -35,6 +35,11 @@ cd "$(dirname "$0")/.."
 OUT_DIR="${OUT_DIR:-qemu-shots}"
 QMP_SOCK="${QMP_SOCK:-/tmp/uconsole-qemu-qmp.sock}"
 BOOT_TIMEOUT="${BOOT_TIMEOUT:-180}"
+# Separate budget for "QEMU process exists at all". With --build,
+# run-qemu-test.sh compiles the image before it ever launches QEMU, so
+# this window has to cover a whole bitbake run -- reusing the 180s
+# render timeout here would abort every build before it finished.
+START_TIMEOUT="${START_TIMEOUT:-300}"
 SETTLE="${SETTLE:-8}"
 BUILD=0
 KEEP=0
@@ -81,7 +86,11 @@ rm -f "$QMP_SOCK"
 
 echo "== booting =="
 BOOT_ARGS=(--vnc)
-[ "$BUILD" -eq 1 ] && BOOT_ARGS+=(--build)
+if [ "$BUILD" -eq 1 ]; then
+    BOOT_ARGS+=(--build)
+    START_TIMEOUT="${START_TIMEOUT_BUILD:-7200}"
+    echo "(--build: allowing up to ${START_TIMEOUT}s for the image to build)"
+fi
 setsid ./scripts/run-qemu-test.sh "${BOOT_ARGS[@]}" > "$OUT_DIR/boot.log" 2>&1 &
 QEMU_PID=$!
 # setsid makes the child a session/group leader, so its pid is the pgid.
@@ -94,8 +103,8 @@ until [ -S "$QMP_SOCK" ]; do
         tail -20 "$OUT_DIR/boot.log" >&2
         exit 1
     fi
-    if [ "$waited" -ge "$BOOT_TIMEOUT" ]; then
-        echo "No QMP socket after ${BOOT_TIMEOUT}s -- giving up." >&2
+    if [ "$waited" -ge "$START_TIMEOUT" ]; then
+        echo "No QMP socket after ${START_TIMEOUT}s -- giving up." >&2
         tail -20 "$OUT_DIR/boot.log" >&2
         exit 1
     fi
