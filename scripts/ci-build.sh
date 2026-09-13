@@ -40,6 +40,19 @@ command -v kas >/dev/null || {
     exit 127
 }
 
+# Say out loud which caches are in play. A build that quietly ignores a
+# warm 16GB cache and refetches everything still succeeds -- just hours
+# later -- so the only way to catch it is to print the setting and its
+# size up front, where it's visible in the first screen of the log.
+for var in DL_DIR SSTATE_DIR; do
+    eval "val=\${$var:-}"
+    if [ -z "$val" ]; then
+        echo "$var unset -- using this build dir's own (starts cold)"
+    else
+        echo "$var=$val ($(du -sh "$val" 2>/dev/null | cut -f1 || echo "empty/missing"))"
+    fi
+done
+
 attempt=1
 until kas checkout "$CONFIG"; do
     if [ "$attempt" -ge "$RETRIES" ]; then

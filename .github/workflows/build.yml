@@ -76,15 +76,53 @@ jobs:
           # into the pane instead, so bitbake gets its normal graceful
           # shutdown (finish in-flight tasks, then stop) rather than
           # being silently abandoned.
+          # Is the pane back at a shell prompt? `pane_current_command`
+          # reports the foreground process, so anything that isn't a
+          # shell means a build (or its shutdown) is still in there.
+          #
+          # Two consecutive idle reads, not one: a build script between
+          # sub-commands shows its own shell for an instant, and reading
+          # that single sample as "finished" is precisely the wrong call
+          # to get wrong here.
+          wait_for_idle() {
+            local limit="$1" waited=0 cmd idle=0
+            while [ "$waited" -lt "$limit" ]; do
+              cmd=$(tmux list-panes -t "$SESSION" -F '#{pane_current_command}' 2>/dev/null | head -1)
+              case "$cmd" in
+                ""|bash|sh|zsh) idle=$((idle + 1)) ;;
+                *)              idle=0 ;;
+              esac
+              [ "$idle" -ge 2 ] && return 0
+              sleep 5 &
+              wait $!
+              waited=$((waited + 5))
+            done
+            return 1
+          }
+
           cleanup() {
             echo "Cancellation requested -- sending Ctrl-C into '$SESSION'"
             tmux send-keys -t "$SESSION" C-c
+            # Don't exit while bitbake is still winding down. The next
+            # queued run reuses this same session, and typing a command
+            # into a pane that's still busy is how a stale job once got
+            # its keystrokes interpreted by a live build.
+            echo "Waiting for the pane to go idle before releasing the session..."
+            wait_for_idle 300 || echo "Pane still busy after 5m -- releasing anyway."
             rm -f "$MARKER"
             exit 1
           }
           trap cleanup TERM INT
 
           tmux has-session -t "$SESSION" 2>/dev/null || tmux new-session -d -s "$SESSION" -x 220 -y 50
+
+          # Same guard on the way in: never send-keys into a pane that
+          # is still running something.
+          if ! wait_for_idle 300; then
+            echo "Session '$SESSION' is still busy after 5m -- refusing to type into it." >&2
+            echo "Attach with 'tmux attach -t $SESSION' and see what's running." >&2
+            exit 1
+          fi
 
           # The build itself lives in scripts/ci-build.sh rather than in
           # this string: everything here has to survive two rounds of
@@ -99,11 +137,29 @@ jobs:
           # it started with -- which is how kas once ended up trying to
           # mkdir /build.
           #
-          # KAS_VENV is passed as a one-shot variable because a fresh
-          # tmux shell doesn't inherit the runner service's environment.
-          # It's optional: set it in the runner's .env if kas lives in a
-          # virtualenv rather than on the system PATH.
-          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE && KAS_VENV='${KAS_VENV:-}' ./scripts/ci-build.sh kas-project.yml; echo \$? > $MARKER" Enter
+          # Everything the build needs from the runner's environment has
+          # to be handed over explicitly: a fresh tmux shell doesn't
+          # inherit the runner service's environment, so a DL_DIR set in
+          # ~/actions-runner/.env reaches this step but *not* bitbake.
+          # Miss that and the build silently ignores a warm shared cache
+          # and refetches ~16GB into its own workspace -- it still
+          # succeeds, just hours later, which is the worst way for a
+          # misconfiguration to present itself.
+          #
+          # Only non-empty values are passed. Exporting DL_DIR='' would
+          # be worse than not exporting it: bitbake would take the empty
+          # string as the setting rather than falling back to its
+          # default.
+          ENV_PREFIX=""
+          for var in DL_DIR SSTATE_DIR KAS_VENV; do
+            eval "val=\${$var:-}"
+            if [ -n "$val" ]; then
+              ENV_PREFIX="$ENV_PREFIX $var='$val'"
+            fi
+          done
+          echo "Passing to the build:${ENV_PREFIX:- (nothing -- using in-tree defaults)}"
+
+          tmux send-keys -t "$SESSION" "cd $GITHUB_WORKSPACE &&${ENV_PREFIX} ./scripts/ci-build.sh kas-project.yml; echo \$? > $MARKER" Enter
 
           echo "Build launched in tmux session '$SESSION' -- attach with: tmux attach -t $SESSION"
           while [ ! -f "$MARKER" ]; do
