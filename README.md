@@ -49,8 +49,23 @@ normal QEMU window:
 ./scripts/run-qemu-test.sh
 ```
 
-Pass `--vnc` instead if you ever need to check it from a different
-machine, or `--nographic` for serial-only output with no display at all.
+Pass `--web` to view the guest's screen in a browser tab (noVNC, on
+port 6080) with nothing to install on the viewing machine — the easiest
+way to eyeball the GUI from a laptop while the image runs on the build
+host. `--vnc` binds QEMU's VNC server for a native client instead, and
+`--nographic` gives serial-only output with no display at all.
+
+The script always exposes a QMP socket, which makes the UI scriptable
+without anyone sitting at the screen:
+
+```bash
+./scripts/qemu-sendkey.py ctrl-alt-spc      # open the command palette
+./scripts/qemu-screenshot.py -o shell.png   # grab the framebuffer
+```
+
+That pair is how the shell UI gets checked against `ui-mocks/` after a
+change — drive it, capture it, compare — rather than by flashing an SD
+card and squinting at the real panel.
 
 ## Repo layout
 
@@ -61,6 +76,8 @@ machine, or `--nographic` for serial-only output with no display at all.
 | `meta-uconsole-sdr/recipes-core/` | Custom apps (OOBE wizard, lock screen, hotkey daemon, control panel, shared theme module), the image recipe, and packagegroups |
 | `meta-uconsole-sdr/recipes-support/` | SDR tool recipes with no existing upstream Yocto package (SoapySDR, rtl_433, multimon-ng, direwolf, dump1090) |
 | `meta-uconsole-sdr/recipes-connectivity/` | LoRa↔MQTT bridge daemon |
+| `meta-uconsole-sdr/recipes-graphics/` | Weston config, and the UI fonts (JetBrains Mono, Material Symbols) the shell names explicitly |
+| `ui-mocks/` | Design reference the shell theme is built from — `DESIGN.md` holds the colour/spacing tokens |
 | `meta-uconsole-sdr/recipes-kernel/`, `recipes-bsp/` | Kernel config fragments, boot config (`config.txt`) overrides |
 | `meta-uconsole-sdr/recipes-{navigation,extended,core}/*.bbappend` | Small, targeted overrides to upstream recipes (gpsd device binding, plymouth DRM support, PAM lockout policy) |
 
@@ -167,26 +184,30 @@ defaults to binding `0.0.0.0` for LAN access — pass `--host 127.0.0.1`
 to keep it local. Logs aren't usually sensitive but do contain absolute
 paths and package versions, so don't expose it to an untrusted network.
 
-For a live terminal in the browser, [ttyd](https://github.com/tsl0922/ttyd)
-works well alongside it:
+For the **live** pane — bitbake's progress display as it happens —
+`scripts/build-terminal.sh` serves the build's tmux session over HTTP
+using [ttyd](https://github.com/tsl0922/ttyd):
 
 ```bash
-ttyd -p 7681 -R tmux attach -t gh-actions-yocto-build
+./scripts/build-terminal.sh                        # newest active session
+./scripts/build-terminal.sh -s gh-actions-yocto-build
 ```
 
-Two things worth knowing there. `-R` makes it **read-only** — a stray
-keystroke into a live bitbake pane is an easy way to wreck a build. And
-attaching a browser resizes the tmux window to the smallest client,
-which mangles bitbake's progress display for everyone; pin it with
-`tmux set-option -t <session> window-size manual` (tmux 3.1+).
+It's **read-only** unless you pass `--writable`: a stray keystroke into
+a live bitbake pane is an easy way to wreck a multi-hour build. It also
+pins the tmux window size, because otherwise attaching a browser
+resizes the window to the smallest attached client and mangles the
+progress display for everyone else watching.
 
 On Debian/Ubuntu, note that the `ttyd` apt package ships its own
 `ttyd.service` that auto-starts on port 7681 serving a login prompt —
 `sudo systemctl disable --now ttyd.service` before running your own on
-that port, or it'll fail to bind.
+that port, or it'll fail to bind. The script checks for this and says
+so rather than dying with a bare `EADDRINUSE`.
 
-Both of these are per-machine plumbing, so their systemd units live on
-the build host rather than in this repo.
+Both servers are per-machine plumbing, so if you want them running
+permanently, their systemd units live on the build host rather than in
+this repo.
 
 ## Status
 

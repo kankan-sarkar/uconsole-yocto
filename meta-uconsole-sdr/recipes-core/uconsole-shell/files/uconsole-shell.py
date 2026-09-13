@@ -54,22 +54,50 @@ import uconsole_theme
 SOCK_PATH = "/run/uconsole-shell.sock"
 
 BATTERY_CAPACITY_GLOB = "/sys/class/power_supply/*/capacity"
+THERMAL_GLOB = "/sys/class/thermal/thermal_zone*/temp"
 
 # Checked against the real installed path for each -- only apps that
 # actually exist in this image variant show up in the Dock (the
 # qemu-test image has none of the SDR tools; real hardware does).
+# The one-line description is what the search overlay shows under each
+# result, per the command-palette mock in ui-mocks/.
+# Icons are Material Symbols names resolved through uconsole_theme.icon()
+# rather than emoji: the fonts in this image carry no pictographs, so
+# emoji render as empty boxes (which is exactly what the first themed
+# build did before ttf-material-symbols was added).
 CANDIDATE_APPS = [
-    ("Control Panel", "⚙", "/usr/bin/uconsole-panel"),
-    ("GQRX", "\U0001F4E1", "/usr/bin/gqrx"),
-    ("SDRangel", "\U0001F4E1", "/usr/bin/sdrangel"),
-    ("CubicSDR", "\U0001F4E1", "/usr/bin/CubicSDR"),
-    ("SDR++", "\U0001F4E1", "/usr/bin/sdrpp"),
-    ("Terminal", "⌨", "/usr/bin/weston-terminal"),
+    ("Terminal", "terminal", "Launch a root shell session", "/usr/bin/weston-terminal"),
+    ("Control Panel", "settings", "CPU governor, GPIO rails, brightness, radios", "/usr/bin/uconsole-panel"),
+    ("GQRX", "satellite", "Software defined radio receiver", "/usr/bin/gqrx"),
+    ("SDRangel", "satellite", "Multi-mode SDR transceiver", "/usr/bin/sdrangel"),
+    ("CubicSDR", "satellite", "Cross-platform SDR spectrum browser", "/usr/bin/CubicSDR"),
+    ("SDR++", "satellite", "Modular SDR receiver", "/usr/bin/sdrpp"),
 ]
 
 
 def discover_apps():
-    return [(name, icon, path) for name, icon, path in CANDIDATE_APPS if os.path.exists(path)]
+    return [app for app in CANDIDATE_APPS if os.path.exists(app[3])]
+
+
+def get_cpu_temperature():
+    """Highest thermal zone reading in °C, or None if the host has none.
+
+    The status bar shows this because a field SDR rig is a thermally
+    constrained box: DESIGN.md puts temperature in the hardware status
+    bar for good reason. QEMU has no thermal zones, so None is normal
+    there and the label simply hides.
+    """
+    readings = []
+    for path in glob.glob(THERMAL_GLOB):
+        try:
+            with open(path) as f:
+                millicelsius = int(f.read().strip())
+        except (OSError, ValueError):
+            continue
+        # Kernel reports millidegrees, but a few drivers report whole
+        # degrees; treat implausibly small values as already-degrees.
+        readings.append(millicelsius / 1000.0 if millicelsius > 1000 else float(millicelsius))
+    return max(readings) if readings else None
 
 
 def get_network_status():
@@ -197,29 +225,65 @@ def start_ipc_server(bridge):
 
 
 class StatusBar(QWidget):
-    """Top strip: network (hover for IP), VPN toggle, battery."""
+    """Top hardware status strip, per the mock in ui-mocks/.
+
+    Right-aligned and deliberately terse: network (hover for IP),
+    temperature, VPN, battery, clock. Small label type, a hairline
+    bottom border, no heavy chrome -- it's meant to read as part of the
+    hardware rather than as an application toolbar.
+    """
 
     def __init__(self):
         super().__init__()
-        layout = QHBoxLayout()
-        layout.setContentsMargins(16, 8, 16, 8)
+        p = uconsole_theme.palette()
+        self.setObjectName("statusBar")
+        self.setFixedHeight(30)
+        self.setStyleSheet(
+            f"#statusBar {{ background-color: {p['surface_low']};"
+            f" border-bottom: 1px solid {p['surface_highest']}; }}"
+            f"#statusBar QLabel {{ font-size: 11px; letter-spacing: 1px; }}"
+        )
 
-        self.clock_label = QLabel("")
-        layout.addWidget(self.clock_label)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(12, 4, 12, 4)
+        layout.setSpacing(16)
+        # Everything sits on the right, as in the mock; the left side is
+        # left clear so a future taskbar can live there.
         layout.addStretch()
 
-        self.net_label = QLabel("●")
+        icon_css = f"font-family: '{uconsole_theme.ICON_FONT_FAMILY}'; font-size: 14px;"
+
+        self.net_label = QLabel(uconsole_theme.icon("wifi"))
+        self.net_label.setStyleSheet(f"color: {p['secondary']}; {icon_css}")
         self.net_label.setToolTip("No network connection")
         layout.addWidget(self.net_label)
 
+        self.temp_label = QLabel("")
+        self.temp_label.setStyleSheet(f"color: {p['error']}; font-size: 11px;")
+        layout.addWidget(self.temp_label)
+
         self.vpn_button = QPushButton("VPN")
         self.vpn_button.setCheckable(True)
+        self.vpn_button.setFixedHeight(20)
+        self.vpn_button.setStyleSheet(
+            f"QPushButton {{ font-size: 10px; padding: 1px 6px;"
+            f" border: 1px solid {p['outline_variant']}; border-radius: 2px;"
+            f" background: transparent; color: {p['on_surface_variant']}; }}"
+            f"QPushButton:checked {{ color: {p['tertiary']};"
+            f" border: 1px solid {p['tertiary']}; }}"
+        )
         self.vpn_button.clicked.connect(self._toggle_vpn)
         self._vpn_name = None
         layout.addWidget(self.vpn_button)
 
         self.battery_label = QLabel("")
+        self.battery_label.setStyleSheet(f"color: {p['tertiary']};")
         layout.addWidget(self.battery_label)
+
+        self.clock_label = QLabel("")
+        self.clock_label.setStyleSheet(
+            f"color: {p['on_surface']}; font-size: 12px; font-weight: 600;")
+        layout.addWidget(self.clock_label)
 
         self.setLayout(layout)
 
@@ -237,16 +301,36 @@ class StatusBar(QWidget):
 
     def refresh(self):
         import datetime
-        self.clock_label.setText(datetime.datetime.now().strftime("%H:%M"))
+        self.clock_label.setText(datetime.datetime.now().strftime("%H:%M:%S"))
 
+        p = uconsole_theme.palette()
         kind, ip = get_network_status()
         if kind is None:
-            self.net_label.setText("○")
+            self.net_label.setText(uconsole_theme.icon("wifi"))
+            self.net_label.setStyleSheet(
+                f"color: {p['outline']};"
+                f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}'; font-size: 14px;")
             self.net_label.setToolTip("No network connection")
         else:
-            glyph = "\U0001F5A7" if kind == "wired" else "\U0001F4F6"
-            self.net_label.setText(glyph)
+            self.net_label.setText(
+                uconsole_theme.icon("network" if kind == "wired" else "wifi"))
+            self.net_label.setStyleSheet(
+                f"color: {p['secondary']};"
+                f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}'; font-size: 14px;")
+            # Hovering is how you get the address, per the mock -- the
+            # bar itself stays terse.
             self.net_label.setToolTip(ip or "Connected (IP unknown)")
+
+        temp = get_cpu_temperature()
+        # Hidden rather than shown empty when the host has no thermal
+        # zones (QEMU), so the bar doesn't keep a blank gap.
+        self.temp_label.setVisible(temp is not None)
+        if temp is not None:
+            self.temp_label.setText(
+                f"{uconsole_theme.icon('thermostat')} {temp:.0f}°C")
+            self.temp_label.setStyleSheet(
+                f"color: {p['error']}; font-size: 11px;"
+                f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}';")
 
         if self._vpn_name is None:
             vpns = list_vpn_connections()
@@ -265,8 +349,11 @@ class StatusBar(QWidget):
         if percent is None:
             self.battery_label.setText("")
         else:
-            bolt = "⚡" if charging else ""
+            bolt = uconsole_theme.icon("bolt") if charging else ""
             self.battery_label.setText(f"{bolt}{percent}%")
+            self.battery_label.setStyleSheet(
+                f"color: {uconsole_theme.palette()['tertiary']}; font-size: 11px;"
+                f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}';")
             if charging and self._battery_anim.state() != QPropertyAnimation.State.Running:
                 self._battery_anim.setLoopCount(-1)
                 self._battery_anim.start()
@@ -282,63 +369,225 @@ class StatusBar(QWidget):
 
 
 class Dock(QWidget):
+    """Floating icon dock along the bottom edge, per the mock.
+
+    A single rounded translucent container holding square icon tiles,
+    rather than a full-width bar -- on a 1280x480 panel a full-width
+    bar wastes scarce vertical space and reads as chrome.
+    """
+
     def __init__(self, launch_callback):
         super().__init__()
         self._launch = launch_callback
         self.apps = discover_apps()
+        p = uconsole_theme.palette()
+        accent = uconsole_theme.accent_color()
 
-        layout = QHBoxLayout()
-        layout.setContentsMargins(16, 8, 16, 16)
-        layout.addStretch()
-        for index, (name, icon, path) in enumerate(self.apps, start=1):
-            button = QPushButton(f"{icon}\n{name}")
-            button.setFixedSize(96, 72)
-            button.setToolTip(f"{name}  (Ctrl+{index})" if index <= 9 else name)
-            button.clicked.connect(lambda _checked, p=path: self._launch(p))
-            layout.addWidget(button)
-        layout.addStretch()
-        self.setLayout(layout)
+        outer = QHBoxLayout()
+        outer.setContentsMargins(0, 0, 0, 16)
+        outer.addStretch()
+
+        tray = QWidget()
+        tray.setObjectName("dockTray")
+        tray.setStyleSheet(
+            f"#dockTray {{ background-color: {p['surface_high']};"
+            f" border: 1px solid {p['surface_highest']};"
+            f" border-radius: 12px; }}"
+        )
+        tray_layout = QHBoxLayout()
+        tray_layout.setContentsMargins(12, 8, 12, 8)
+        tray_layout.setSpacing(8)
+
+        if not self.apps:
+            empty = QLabel("no launchable apps installed")
+            empty.setStyleSheet(f"color: {p['outline']}; font-size: 11px;")
+            tray_layout.addWidget(empty)
+
+        for index, (name, icon_name, _desc, path) in enumerate(self.apps, start=1):
+            button = QPushButton(uconsole_theme.icon(icon_name))
+            button.setFixedSize(52, 52)
+            button.setStyleSheet(
+                f"QPushButton {{ font-family: '{uconsole_theme.ICON_FONT_FAMILY}';"
+                f" font-size: 24px;"
+                f" background-color: {p['surface_container']};"
+                f" border: 1px solid {p['surface_highest']};"
+                f" border-radius: 8px; color: {p['on_surface']}; }}"
+                f"QPushButton:hover, QPushButton:focus {{"
+                f" background-color: {p['surface_highest']};"
+                f" border: 1px solid {accent}; color: {accent}; }}"
+            )
+            hint = f"{name}  (Ctrl+{index})" if index <= 9 else name
+            button.setToolTip(hint)
+            button.clicked.connect(lambda _checked, p_=path: self._launch(p_))
+            tray_layout.addWidget(button)
+
+        tray.setLayout(tray_layout)
+        outer.addWidget(tray)
+        outer.addStretch()
+        self.setLayout(outer)
 
     def launch_index(self, index_1_based):
         pos = index_1_based - 1
         if 0 <= pos < len(self.apps):
-            self._launch(self.apps[pos][2])
+            self._launch(self.apps[pos][3])
 
 
 class SearchOverlay(QWidget):
+    """Command palette, per the mock in ui-mocks/.
+
+    A single card floating over a dimmed backdrop: prompt row with an
+    ESC hint, then result rows carrying a title, a one-line
+    description and the launch shortcut, then a footer spelling out the
+    navigation keys. The hints are on screen rather than assumed
+    because this device is driven by keyboard and d-pad, not a mouse.
+    """
+
     def __init__(self, apps, launch_callback, close_callback):
         super().__init__()
         self._apps = apps
         self._launch = launch_callback
         self._close = close_callback
-        # Deliberately NOT objectName "glassCard" -- that's reserved
-        # for the floating `card` widget below. Giving both the same
-        # name would double up the glass-panel border/rounded-corner
-        # styling on this widget's own (much larger) full-window rect
-        # as well, nesting one rounded box inside another instead of a
-        # single card floating over a plain dimmed backdrop.
-        self.setStyleSheet("background-color: rgba(0, 0, 0, 140);")
+        p = uconsole_theme.palette()
+        accent = uconsole_theme.accent_color()
+
+        # Deliberately NOT objectName "glassCard" -- that's reserved for
+        # the floating card below. Sharing the name would apply the
+        # panel border and rounded corners to this widget's own
+        # full-window rect too, nesting one rounded box inside another
+        # instead of a single card over a plain dimmed backdrop.
+        self.setStyleSheet("background-color: rgba(4, 14, 31, 190);")
 
         outer = QVBoxLayout()
-        outer.setContentsMargins(200, 80, 200, 80)
+        outer.setContentsMargins(160, 40, 160, 40)
+        # Pin the card to the top third rather than centring it in the
+        # remaining space: a palette that grows downward from a fixed
+        # point is easier to aim at than one that recentres itself every
+        # time the result count changes.
+        outer.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         card = QWidget()
         card.setObjectName("glassCard")
+        card.setStyleSheet(
+            f"#glassCard {{ background-color: {p['surface_container']};"
+            f" border: 1px solid {p['surface_highest']};"
+            f" border-radius: 8px; }}"
+        )
         card_layout = QVBoxLayout()
+        card_layout.setContentsMargins(0, 0, 0, 0)
+        card_layout.setSpacing(0)
+
+        # --- prompt row -------------------------------------------------
+        prompt_row = QWidget()
+        prompt_row.setStyleSheet(
+            f"border-bottom: 1px solid {p['surface_highest']};")
+        prompt_layout = QHBoxLayout()
+        prompt_layout.setContentsMargins(12, 10, 12, 10)
+        prompt_layout.setSpacing(8)
+
+        sigil = QLabel(uconsole_theme.icon("search"))
+        sigil.setStyleSheet(
+            f"color: {accent}; font-size: 16px; border: none;"
+            f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}';")
+        prompt_layout.addWidget(sigil)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Search apps...")
+        self.search_input.setPlaceholderText(
+            "Type a command or search apps (e.g. terminal, monitor)")
+        self.search_input.setStyleSheet(
+            f"QLineEdit {{ background: transparent; border: none;"
+            f" font-size: 14px; color: {p['on_surface']}; padding: 0; }}"
+        )
         self.search_input.textChanged.connect(self._filter)
         self.search_input.returnPressed.connect(self._launch_selected)
-        card_layout.addWidget(self.search_input)
+        prompt_layout.addWidget(self.search_input)
 
+        esc = QLabel("ESC")
+        esc.setStyleSheet(
+            f"color: {p['on_surface_variant']}; font-size: 10px;"
+            f" background-color: {p['surface_high']};"
+            f" border: 1px solid {p['outline_variant']};"
+            f" border-radius: 2px; padding: 2px 6px;"
+        )
+        prompt_layout.addWidget(esc)
+        prompt_row.setLayout(prompt_layout)
+        card_layout.addWidget(prompt_row)
+
+        # --- results ----------------------------------------------------
         self.results = QListWidget()
+        self.results.setStyleSheet(
+            f"QListWidget {{ background: transparent; border: none;"
+            f" padding: 4px; }}"
+            f"QListWidget::item {{ border-radius: 4px; padding: 0px; }}"
+            f"QListWidget::item:selected {{"
+            f" background-color: {p['surface_high']}; }}"
+        )
         self.results.itemActivated.connect(lambda _item: self._launch_selected())
         card_layout.addWidget(self.results)
+
+        # --- footer hints -----------------------------------------------
+        footer = QWidget()
+        footer.setStyleSheet(
+            f"background-color: {p['surface_low']};"
+            f" border-top: 1px solid {p['surface_highest']};")
+        footer_layout = QHBoxLayout()
+        footer_layout.setContentsMargins(12, 6, 12, 6)
+        hint_style = f"color: {p['on_surface_variant']}; font-size: 11px; border: none;"
+        nav_hint = QLabel("Use ↑↓ to navigate")
+        nav_hint.setStyleSheet(hint_style)
+        sel_hint = QLabel("Press Enter to select")
+        sel_hint.setStyleSheet(hint_style)
+        footer_layout.addWidget(nav_hint)
+        footer_layout.addStretch()
+        footer_layout.addWidget(sel_hint)
+        footer.setLayout(footer_layout)
+        card_layout.addWidget(footer)
 
         card.setLayout(card_layout)
         outer.addWidget(card)
         self.setLayout(outer)
+
+    def _make_row(self, name, icon_name, description, index):
+        """A result row: icon, title over description, shortcut chip."""
+        p = uconsole_theme.palette()
+        accent = uconsole_theme.accent_color()
+
+        row = QWidget()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(12)
+
+        glyph = QLabel(uconsole_theme.icon(icon_name))
+        glyph.setFixedWidth(24)
+        glyph.setStyleSheet(
+            f"color: {accent}; font-size: 18px;"
+            f" font-family: '{uconsole_theme.ICON_FONT_FAMILY}';")
+        layout.addWidget(glyph)
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        title = QLabel(name)
+        title.setStyleSheet(
+            f"color: {p['on_surface']}; font-size: 13px; font-weight: 600;")
+        subtitle = QLabel(description)
+        subtitle.setStyleSheet(
+            f"color: {p['on_surface_variant']}; font-size: 11px;")
+        text_col.addWidget(title)
+        text_col.addWidget(subtitle)
+        layout.addLayout(text_col)
+        layout.addStretch()
+
+        if index <= 9:
+            chip = QLabel(f"Ctrl+{index}")
+            chip.setStyleSheet(
+                f"color: {p['on_surface_variant']}; font-size: 10px;"
+                f" background-color: {p['surface_high']};"
+                f" border: 1px solid {p['outline_variant']};"
+                f" border-radius: 2px; padding: 2px 6px;"
+            )
+            layout.addWidget(chip)
+
+        row.setLayout(layout)
+        return row
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -349,11 +598,17 @@ class SearchOverlay(QWidget):
     def _filter(self, text):
         self.results.clear()
         needle = text.strip().lower()
-        for name, icon, path in self._apps:
-            if needle in name.lower():
-                item = QListWidgetItem(f"{icon}  {name}")
-                item.setData(Qt.ItemDataRole.UserRole, path)
-                self.results.addItem(item)
+        for index, (name, icon, description, path) in enumerate(self._apps, start=1):
+            # Match the description too, so "shell" finds Terminal and
+            # "radio" finds the SDR apps without knowing their names.
+            if needle and needle not in name.lower() and needle not in description.lower():
+                continue
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            widget = self._make_row(name, icon, description, index)
+            item.setSizeHint(widget.sizeHint())
+            self.results.addItem(item)
+            self.results.setItemWidget(item, widget)
         if self.results.count():
             self.results.setCurrentRow(0)
 
@@ -380,11 +635,25 @@ class HomeScreen(QWidget):
         self.setWindowState(Qt.WindowState.WindowFullScreen)
         self.setStyleSheet(uconsole_theme.build_qss() + uconsole_theme.build_glass_qss())
 
+        p = uconsole_theme.palette()
         self.stack = QStackedLayout()
+        # The overlay has to paint over the home page rather than
+        # replace it, so the dimmed backdrop reads as a layer above the
+        # desktop -- StackAll keeps both widgets visible at once.
+        self.stack.setStackingMode(QStackedLayout.StackingMode.StackAll)
 
         home_page = QWidget()
+        home_page.setObjectName("homePage")
+        # Vertical gradient from the deep surface to the lowest tone,
+        # which is what gives the mock's sense of depth without a
+        # wallpaper file to ship and keep in sync.
+        home_page.setStyleSheet(
+            f"#homePage {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
+            f" stop:0 {p['surface']}, stop:1 {p['surface_lowest']}); }}"
+        )
         home_layout = QVBoxLayout()
         home_layout.setContentsMargins(0, 0, 0, 0)
+        home_layout.setSpacing(0)
         self.status_bar = StatusBar()
         home_layout.addWidget(self.status_bar)
         home_layout.addStretch()
@@ -397,6 +666,10 @@ class HomeScreen(QWidget):
         self.stack.addWidget(home_page)
         self.stack.addWidget(self.search_overlay)
         self.setLayout(self.stack)
+        # Starts closed: the desktop is the resting state, and the
+        # palette is summoned by Ctrl+Alt+Space (or the SEARCH command
+        # from the hotkey daemon).
+        self.search_overlay.hide()
 
         self.bridge = IpcBridge()
         self.bridge.command_received.connect(self._on_command)
@@ -424,18 +697,27 @@ class HomeScreen(QWidget):
         # _come_home() above -- just bring the home screen back.
 
     def _come_home(self):
-        self.stack.setCurrentIndex(0)
+        self._close_search()
         self.status_bar.refresh()
         self.show()
         self.raise_()
         self.activateWindow()
 
     def _open_search(self):
-        self._come_home()
-        self.stack.setCurrentIndex(1)
+        self.status_bar.refresh()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        # StackAll keeps both layers mapped, so the overlay is shown and
+        # raised rather than swapped in -- that's what lets its dimmed
+        # backdrop read as a layer over the desktop instead of
+        # replacing it.
+        self.search_overlay.show()
+        self.search_overlay.raise_()
+        self.search_overlay.setFocus()
 
     def _close_search(self):
-        self.stack.setCurrentIndex(0)
+        self.search_overlay.hide()
 
     def _launch(self, path):
         try:

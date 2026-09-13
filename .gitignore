@@ -7,6 +7,7 @@
 # built. Only meta-uconsole-sdr/ (this project's own layer) should
 # ever be tracked.
 /build/
+/build-qemu-test/
 /poky/
 /meta-openembedded/
 /meta-raspberrypi/

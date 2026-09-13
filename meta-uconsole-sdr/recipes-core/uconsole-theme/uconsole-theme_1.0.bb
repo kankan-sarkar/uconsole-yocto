@@ -9,7 +9,12 @@ S = "${WORKDIR}"
 
 inherit python3-dir
 
-RDEPENDS:${PN} = "python3-core python3-json"
+# Both fonts are named explicitly by the stylesheets and icon helpers
+# this module provides (FONT_FAMILY, ICON_FONT_FAMILY), and Qt
+# stylesheets don't fall back across families the way CSS does -- so a
+# missing font isn't a graceful downgrade, it's text in the wrong face
+# or a row of empty boxes where the icons should be.
+RDEPENDS:${PN} = "python3-core python3-json ttf-jetbrains-mono ttf-material-symbols"
 
 do_install() {
     install -d ${D}${PYTHON_SITEPACKAGES_DIR}
