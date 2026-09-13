@@ -63,9 +63,21 @@ without anyone sitting at the screen:
 ./scripts/qemu-screenshot.py -o shell.png   # grab the framebuffer
 ```
 
-That pair is how the shell UI gets checked against `ui-mocks/` after a
-change — drive it, capture it, compare — rather than by flashing an SD
-card and squinting at the real panel.
+`scripts/qemu-verify.sh` runs that whole loop unattended — boot, wait
+for something to render, capture the home screen, open the palette,
+capture that too, tear down:
+
+```bash
+./scripts/qemu-verify.sh --build     # -> qemu-shots/home.png, palette.png
+```
+
+Its exit code is the useful part. `qemu-screenshot.py --check` counts
+what's actually in the framebuffer and fails when one flat colour
+covers the screen, so "the compositor came up but painted nothing"
+fails the check instead of passing silently. That is not hypothetical:
+it's the exact shape of the VT bug documented in
+`meta-uconsole-sdr/recipes-graphics/wayland/files/10-uconsole-vt.conf`,
+where every log looked healthy and the screen showed a login prompt.
 
 ## Repo layout
 
