@@ -64,11 +64,11 @@ without anyone sitting at the screen:
 ```
 
 `scripts/qemu-verify.sh` runs that whole loop unattended — boot, wait
-for something to render, capture the home screen, open the palette,
+until something actually renders, capture it, press Ctrl+Alt+Space,
 capture that too, tear down:
 
 ```bash
-./scripts/qemu-verify.sh --build     # -> qemu-shots/home.png, palette.png
+./scripts/qemu-verify.sh --build     # -> qemu-shots/01-first-screen.png, 02-after-hotkey.png
 ```
 
 Its exit code is the useful part. `qemu-screenshot.py --check` counts
@@ -78,6 +78,11 @@ fails the check instead of passing silently. That is not hypothetical:
 it's the exact shape of the VT bug documented in
 `meta-uconsole-sdr/recipes-graphics/wayland/files/10-uconsole-vt.conf`,
 where every log looked healthy and the screen showed a login prompt.
+
+The captures are numbered rather than named, because `runqemu` boots
+the rootfs read-write and the guest keeps its state between runs: on a
+freshly built image the first screen is the OOBE wizard, and only once
+you've walked through that do you land on the shell's home screen.
 
 ## Repo layout
 

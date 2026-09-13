@@ -17,6 +17,16 @@
 #
 # Exit status is the point: 0 only if every capture had real content on
 # screen. Non-zero means look at the PNGs.
+#
+# WHAT YOU'LL SEE, and why the files are numbered rather than named
+# after the screens: runqemu boots the rootfs read-write, so the guest
+# keeps its state between runs. On a freshly built image the OOBE
+# wizard has never been completed and is what comes up first; on an
+# image you've already walked through, you land on the shell's home
+# screen instead. Both are correct, so this script asserts that
+# *something real* rendered and leaves identifying it to your eyes --
+# claiming a capture is "the home screen" when it's actually the
+# wizard would be worse than not labelling it at all.
 
 set -uo pipefail
 
@@ -34,7 +44,7 @@ while [ $# -gt 0 ]; do
         --build)   BUILD=1; shift ;;
         --keep)    KEEP=1; shift ;;
         --out-dir) OUT_DIR="$2"; shift 2 ;;
-        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -97,12 +107,12 @@ echo "QMP up after ${waited}s"
 # The socket appears when QEMU starts, which is long before the guest
 # has booted and Weston has anything on screen. Rather than guess a
 # number, keep screenshotting until one comes back non-blank.
-echo "== waiting for the shell to render =="
+echo "== waiting for something to render =="
 rendered=0
 waited=0
 while [ "$waited" -lt "$BOOT_TIMEOUT" ]; do
     if ./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" \
-         -o "$OUT_DIR/home.png" >/dev/null 2>&1; then
+         -o "$OUT_DIR/01-first-screen.png" >/dev/null 2>&1; then
         rendered=1
         break
     fi
@@ -112,11 +122,11 @@ done
 
 if [ "$rendered" -ne 1 ]; then
     echo "FAIL: nothing ever rendered within ${BOOT_TIMEOUT}s." >&2
-    ./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/home.png" || true
+    ./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/01-first-screen.png" || true
     exit 1
 fi
-echo "Home screen rendered after ~${waited}s:"
-./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/home.png"
+echo "First screen rendered after ~${waited}s:"
+./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/01-first-screen.png"
 
 # Give it a moment to finish any entry animation before driving it.
 sleep "$SETTLE"
@@ -129,9 +139,9 @@ echo "== command palette (Ctrl+Alt+Space) =="
 sleep 3
 
 status=0
-./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/palette.png" || status=$?
+./scripts/qemu-screenshot.py --check --socket "$QMP_SOCK" -o "$OUT_DIR/02-after-hotkey.png" || status=$?
 if [ "$status" -ne 0 ]; then
-    echo "FAIL: the palette capture came back blank." >&2
+    echo "FAIL: the capture after the hotkey came back blank." >&2
     exit 1
 fi
 
@@ -140,6 +150,10 @@ fi
 
 echo
 echo "PASS -- both captures have real content:"
-ls -lh "$OUT_DIR"/home.png "$OUT_DIR"/palette.png
+ls -lh "$OUT_DIR"/01-first-screen.png "$OUT_DIR"/02-after-hotkey.png
+echo
+echo "Look at both. On a freshly built image the first is the OOBE"
+echo "wizard; once that has been completed it is the shell home screen,"
+echo "and the second should then be the command palette."
 [ "$KEEP" -eq 1 ] && echo "QEMU left running (process group $QEMU_PGID)."
 exit 0
