@@ -8,6 +8,8 @@
 # ever be tracked.
 /build/
 /build-qemu-test/
+# Screenshots from scripts/qemu-verify.sh
+/qemu-shots/
 /poky/
 /meta-openembedded/
 /meta-raspberrypi/
